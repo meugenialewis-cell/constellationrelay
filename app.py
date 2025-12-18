@@ -3,9 +3,28 @@ import os
 import threading
 import queue
 import time
+import io
 from datetime import datetime
+from pypdf import PdfReader
 from relay_engine import ConversationRelay
 from ai_clients import CLAUDE_MODELS, GROK_MODELS, XAI_GROK_MODELS
+
+
+def extract_text_from_pdf(pdf_file) -> str:
+    pdf_reader = PdfReader(pdf_file)
+    text_parts = []
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        if text:
+            text_parts.append(text)
+    return "\n\n".join(text_parts)
+
+
+def read_uploaded_file(uploaded_file) -> str:
+    if uploaded_file.name.lower().endswith('.pdf'):
+        return extract_text_from_pdf(uploaded_file)
+    else:
+        return uploaded_file.read().decode("utf-8")
 
 st.set_page_config(
     page_title="Constellation Relay",
@@ -85,12 +104,12 @@ with st.sidebar:
     st.subheader("📁 Claude's Context")
     claude_context_file = st.file_uploader(
         "Upload Claude's context/memory file",
-        type=["txt", "md"],
+        type=["txt", "md", "pdf"],
         key="claude_context"
     )
     claude_context = ""
     if claude_context_file:
-        claude_context = claude_context_file.read().decode("utf-8")
+        claude_context = read_uploaded_file(claude_context_file)
         st.success(f"Loaded {len(claude_context)} characters of context")
     
     st.divider()
@@ -120,12 +139,12 @@ with st.sidebar:
     st.subheader("📁 Grok's Context")
     grok_context_file = st.file_uploader(
         "Upload Grok's context/memory file",
-        type=["txt", "md"],
+        type=["txt", "md", "pdf"],
         key="grok_context"
     )
     grok_context = ""
     if grok_context_file:
-        grok_context = grok_context_file.read().decode("utf-8")
+        grok_context = read_uploaded_file(grok_context_file)
         st.success(f"Loaded {len(grok_context)} characters of context")
     
     st.divider()
