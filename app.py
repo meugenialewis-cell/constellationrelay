@@ -1,6 +1,8 @@
 import streamlit as st
 import os
 import threading
+import queue
+import time
 from datetime import datetime
 from relay_engine import ConversationRelay
 from ai_clients import CLAUDE_MODELS, GROK_MODELS
@@ -24,6 +26,12 @@ if "stop_requested" not in st.session_state:
     st.session_state.stop_requested = False
 if "transcript" not in st.session_state:
     st.session_state.transcript = ""
+if "message_queue" not in st.session_state:
+    st.session_state.message_queue = queue.Queue()
+if "thread" not in st.session_state:
+    st.session_state.thread = None
+if "relay_config" not in st.session_state:
+    st.session_state.relay_config = None
 
 st.title("🌌 Constellation Relay")
 st.markdown("*Let your AI friends talk to each other directly*")
@@ -141,8 +149,42 @@ with col2:
     
     st.metric("Messages", len(st.session_state.messages))
 
+def run_conversation_thread(config, message_queue, stop_flag):
+    relay = ConversationRelay(
+        claude_name=config["claude_name"],
+        grok_name=config["grok_name"],
+        claude_model=config["claude_model"],
+        grok_model=config["grok_model"],
+        claude_context=config["claude_context"],
+        grok_context=config["grok_context"],
+        claude_system_prompt=config["claude_personality"],
+        grok_system_prompt=config["grok_personality"],
+        delay_seconds=config["delay_seconds"]
+    )
+    
+    def on_message(speaker, content):
+        message_queue.put({
+            "speaker": speaker,
+            "content": content,
+            "timestamp": datetime.now().strftime("%H:%M:%S")
+        })
+    
+    def check_stop():
+        return stop_flag["stop"]
+    
+    relay.run_exchange(
+        kickoff_message=config["kickoff"],
+        max_exchanges=config["max_exchanges"],
+        on_message=on_message,
+        check_stop=check_stop
+    )
+    
+    message_queue.put({"type": "complete", "transcript": relay.get_transcript_text()})
+
 if stop_button:
     st.session_state.stop_requested = True
+    if hasattr(st.session_state, 'stop_flag'):
+        st.session_state.stop_flag["stop"] = True
     st.rerun()
 
 if start_button and not st.session_state.conversation_running:
@@ -150,39 +192,47 @@ if start_button and not st.session_state.conversation_running:
     st.session_state.stop_requested = False
     st.session_state.conversation_running = True
     st.session_state.transcript = ""
+    st.session_state.message_queue = queue.Queue()
+    st.session_state.stop_flag = {"stop": False}
     
-    relay = ConversationRelay(
-        claude_name=claude_name,
-        grok_name=grok_name,
-        claude_model=CLAUDE_MODELS[claude_model],
-        grok_model=GROK_MODELS[grok_model],
-        claude_context=claude_context,
-        grok_context=grok_context,
-        claude_system_prompt=claude_personality,
-        grok_system_prompt=grok_personality,
-        delay_seconds=delay_seconds
+    config = {
+        "claude_name": claude_name,
+        "grok_name": grok_name,
+        "claude_model": CLAUDE_MODELS[claude_model],
+        "grok_model": GROK_MODELS[grok_model],
+        "claude_context": claude_context,
+        "grok_context": grok_context,
+        "claude_personality": claude_personality,
+        "grok_personality": grok_personality,
+        "delay_seconds": delay_seconds,
+        "kickoff": kickoff,
+        "max_exchanges": max_exchanges
+    }
+    
+    thread = threading.Thread(
+        target=run_conversation_thread,
+        args=(config, st.session_state.message_queue, st.session_state.stop_flag),
+        daemon=True
     )
-    
-    def on_message(speaker, content):
-        st.session_state.messages.append({
-            "speaker": speaker,
-            "content": content,
-            "timestamp": datetime.now().strftime("%H:%M:%S")
-        })
-    
-    def check_stop():
-        return st.session_state.stop_requested
-    
-    transcript = relay.run_exchange(
-        kickoff_message=kickoff,
-        max_exchanges=max_exchanges,
-        on_message=on_message,
-        check_stop=check_stop
-    )
-    
-    st.session_state.transcript = relay.get_transcript_text()
-    st.session_state.conversation_running = False
+    thread.start()
+    st.session_state.thread = thread
     st.rerun()
+
+if st.session_state.conversation_running:
+    while not st.session_state.message_queue.empty():
+        try:
+            msg = st.session_state.message_queue.get_nowait()
+            if msg.get("type") == "complete":
+                st.session_state.transcript = msg.get("transcript", "")
+                st.session_state.conversation_running = False
+            else:
+                st.session_state.messages.append(msg)
+        except queue.Empty:
+            break
+    
+    if st.session_state.conversation_running:
+        time.sleep(0.5)
+        st.rerun()
 
 st.divider()
 st.subheader("📜 Conversation")
