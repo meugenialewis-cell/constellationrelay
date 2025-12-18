@@ -9,13 +9,15 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
 - `context_files/` - Folder for storing uploaded context/memory files
 - `transcripts/` - Folder for saved conversation transcripts
+- `saved_conversations/` - Folder for saved conversation states (JSON format for resuming)
 
 ## Features
-- Upload context files to give each AI memory and project background
+- Upload context files (TXT, MD, PDF) to give each AI memory and project background
 - Configure AI names and personalities
 - Select different models for each AI (Claude Opus 4.1 and Grok 4.1 Fast as defaults)
 - Real-time conversation viewing
 - Download or save conversation transcripts
+- Save conversations and resume them later (like chat threads)
 - Stop conversations at any time
 
 ## API Integrations
@@ -48,6 +50,16 @@ streamlit run app.py --server.port 5000
 - Phoenix project discussions between Claude (Opus 4) and Grok
 
 ## Recent Changes
+- 2024-12-18: Added save/resume conversation feature
+  - Conversations can be saved with custom names
+  - Saved conversations can be loaded and resumed from where they left off
+  - Auto-saves conversation state including message history
+  - Saved conversations stored in saved_conversations/ folder
+
+- 2024-12-18: Added PDF support for context files
+  - Context uploaders now accept PDF files in addition to TXT and MD
+  - Text automatically extracted from PDFs
+
 - 2024-12-18: Added custom API key support
   - Users can now provide their own Anthropic and xAI API keys
   - Toggle in sidebar to switch between Replit integrations and custom keys

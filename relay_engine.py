@@ -1,4 +1,5 @@
 import time
+import json
 from datetime import datetime
 from typing import Callable
 from ai_clients import call_claude, call_grok
@@ -160,3 +161,86 @@ Keep your responses conversational and engaging. Aim for responses that are subs
             lines.append(entry['content'])
             lines.append("")
         return "\n".join(lines)
+    
+    def get_state(self) -> dict:
+        return {
+            "claude_name": self.claude_name,
+            "grok_name": self.grok_name,
+            "claude_model": self.claude_model,
+            "grok_model": self.grok_model,
+            "delay_seconds": self.delay_seconds,
+            "claude_system": self.claude_system,
+            "grok_system": self.grok_system,
+            "claude_messages": self.claude_messages,
+            "grok_messages": self.grok_messages,
+            "transcript": self.transcript,
+            "current_speaker": "grok" if len(self.transcript) % 2 == 1 else "claude"
+        }
+    
+    def load_state(self, state: dict):
+        self.claude_messages = state.get("claude_messages", [])
+        self.grok_messages = state.get("grok_messages", [])
+        self.transcript = state.get("transcript", [])
+        self.claude_system = state.get("claude_system", self.claude_system)
+        self.grok_system = state.get("grok_system", self.grok_system)
+    
+    def resume_exchange(
+        self, 
+        max_exchanges: int,
+        current_speaker: str = "grok",
+        on_message: Callable[[str, str], None] = None,
+        check_stop: Callable[[], bool] = None
+    ):
+        self.running = True
+        
+        if on_message:
+            on_message("System", "Resuming conversation...")
+        
+        for exchange in range(max_exchanges * 2):
+            if check_stop and check_stop():
+                self.running = False
+                if on_message:
+                    on_message("System", "Conversation stopped by user.")
+                break
+            
+            try:
+                if current_speaker == "grok":
+                    response = call_grok(
+                        self.grok_messages,
+                        self.grok_system,
+                        self.grok_model,
+                        custom_api_key=self.xai_api_key,
+                        use_direct_xai=bool(self.xai_api_key)
+                    )
+                    self.add_message("assistant", response, self.grok_name)
+                    if on_message:
+                        on_message(self.grok_name, response)
+                    current_speaker = "claude"
+                else:
+                    response = call_claude(
+                        self.claude_messages,
+                        self.claude_system,
+                        self.claude_model,
+                        custom_api_key=self.anthropic_api_key
+                    )
+                    self.add_message("assistant", response, self.claude_name)
+                    if on_message:
+                        on_message(self.claude_name, response)
+                    current_speaker = "grok"
+                
+                if exchange < (max_exchanges * 2 - 1):
+                    time.sleep(self.delay_seconds)
+                    
+            except Exception as e:
+                error_msg = f"Error during conversation: {str(e)}"
+                if on_message:
+                    on_message("System", error_msg)
+                self.transcript.append({
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "speaker": "System",
+                    "content": error_msg
+                })
+                break
+        
+        self.running = False
+        return self.transcript

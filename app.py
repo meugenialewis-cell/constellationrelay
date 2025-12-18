@@ -4,6 +4,7 @@ import threading
 import queue
 import time
 import io
+import json
 from datetime import datetime
 from pypdf import PdfReader
 from relay_engine import ConversationRelay
@@ -34,8 +35,55 @@ st.set_page_config(
 
 CONTEXT_FOLDER = "context_files"
 TRANSCRIPTS_FOLDER = "transcripts"
+CONVERSATIONS_FOLDER = "saved_conversations"
 os.makedirs(CONTEXT_FOLDER, exist_ok=True)
 os.makedirs(TRANSCRIPTS_FOLDER, exist_ok=True)
+os.makedirs(CONVERSATIONS_FOLDER, exist_ok=True)
+
+
+def get_saved_conversations():
+    conversations = []
+    if os.path.exists(CONVERSATIONS_FOLDER):
+        for filename in os.listdir(CONVERSATIONS_FOLDER):
+            if filename.endswith('.json'):
+                filepath = os.path.join(CONVERSATIONS_FOLDER, filename)
+                try:
+                    with open(filepath, 'r') as f:
+                        data = json.load(f)
+                        conversations.append({
+                            "filename": filename,
+                            "filepath": filepath,
+                            "name": data.get("name", filename),
+                            "created": data.get("created", "Unknown"),
+                            "message_count": len(data.get("state", {}).get("transcript", []))
+                        })
+                except:
+                    pass
+    return sorted(conversations, key=lambda x: x.get("created", ""), reverse=True)
+
+
+def save_conversation(name: str, state: dict, config: dict):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(c for c in name if c.isalnum() or c in " -_").strip()[:50]
+    filename = f"{safe_name}_{timestamp}.json"
+    filepath = os.path.join(CONVERSATIONS_FOLDER, filename)
+    
+    data = {
+        "name": name,
+        "created": datetime.now().isoformat(),
+        "state": state,
+        "config": config
+    }
+    
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+    
+    return filepath
+
+
+def load_conversation(filepath: str):
+    with open(filepath, 'r') as f:
+        return json.load(f)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -51,6 +99,12 @@ if "thread" not in st.session_state:
     st.session_state.thread = None
 if "relay_config" not in st.session_state:
     st.session_state.relay_config = None
+if "relay_state" not in st.session_state:
+    st.session_state.relay_state = None
+if "loaded_conversation" not in st.session_state:
+    st.session_state.loaded_conversation = None
+if "conversation_name" not in st.session_state:
+    st.session_state.conversation_name = ""
 
 st.title("🌌 Constellation Relay")
 st.markdown("*Let your AI friends talk to each other directly*")
@@ -177,19 +231,29 @@ with col1:
         placeholder="Enter a topic or opening message to start the conversation..."
     )
     
-    col_start, col_stop = st.columns(2)
+    has_loaded_conversation = st.session_state.loaded_conversation is not None
+    
+    col_start, col_resume, col_stop = st.columns(3)
     
     with col_start:
         start_button = st.button(
-            "🚀 Start Conversation",
+            "🚀 Start New",
             disabled=st.session_state.conversation_running,
-            type="primary",
+            type="primary" if not has_loaded_conversation else "secondary",
+            use_container_width=True
+        )
+    
+    with col_resume:
+        resume_button = st.button(
+            "▶️ Resume",
+            disabled=st.session_state.conversation_running or not has_loaded_conversation,
+            type="primary" if has_loaded_conversation else "secondary",
             use_container_width=True
         )
     
     with col_stop:
         stop_button = st.button(
-            "🛑 Stop Conversation",
+            "🛑 Stop",
             disabled=not st.session_state.conversation_running,
             use_container_width=True
         )
@@ -218,6 +282,9 @@ def run_conversation_thread(config, message_queue, stop_flag):
         xai_api_key=config.get("xai_api_key")
     )
     
+    if config.get("resume_state"):
+        relay.load_state(config["resume_state"])
+    
     def on_message(speaker, content):
         message_queue.put({
             "speaker": speaker,
@@ -228,14 +295,26 @@ def run_conversation_thread(config, message_queue, stop_flag):
     def check_stop():
         return stop_flag["stop"]
     
-    relay.run_exchange(
-        kickoff_message=config["kickoff"],
-        max_exchanges=config["max_exchanges"],
-        on_message=on_message,
-        check_stop=check_stop
-    )
+    if config.get("resume_state"):
+        relay.resume_exchange(
+            max_exchanges=config["max_exchanges"],
+            current_speaker=config.get("current_speaker", "grok"),
+            on_message=on_message,
+            check_stop=check_stop
+        )
+    else:
+        relay.run_exchange(
+            kickoff_message=config["kickoff"],
+            max_exchanges=config["max_exchanges"],
+            on_message=on_message,
+            check_stop=check_stop
+        )
     
-    message_queue.put({"type": "complete", "transcript": relay.get_transcript_text()})
+    message_queue.put({
+        "type": "complete", 
+        "transcript": relay.get_transcript_text(),
+        "relay_state": relay.get_state()
+    })
 
 if stop_button:
     st.session_state.stop_requested = True
@@ -248,6 +327,8 @@ if start_button and not st.session_state.conversation_running:
     st.session_state.stop_requested = False
     st.session_state.conversation_running = True
     st.session_state.transcript = ""
+    st.session_state.relay_state = None
+    st.session_state.loaded_conversation = None
     st.session_state.message_queue = queue.Queue()
     st.session_state.stop_flag = {"stop": False}
     
@@ -266,6 +347,7 @@ if start_button and not st.session_state.conversation_running:
         "anthropic_api_key": anthropic_api_key if use_custom_keys else None,
         "xai_api_key": xai_api_key if use_custom_keys else None
     }
+    st.session_state.relay_config = config
     
     thread = threading.Thread(
         target=run_conversation_thread,
@@ -276,12 +358,34 @@ if start_button and not st.session_state.conversation_running:
     st.session_state.thread = thread
     st.rerun()
 
+if resume_button and not st.session_state.conversation_running and st.session_state.loaded_conversation:
+    st.session_state.stop_requested = False
+    st.session_state.conversation_running = True
+    st.session_state.message_queue = queue.Queue()
+    st.session_state.stop_flag = {"stop": False}
+    
+    config = st.session_state.relay_config.copy()
+    config["max_exchanges"] = max_exchanges
+    config["anthropic_api_key"] = anthropic_api_key if use_custom_keys else None
+    config["xai_api_key"] = xai_api_key if use_custom_keys else None
+    
+    thread = threading.Thread(
+        target=run_conversation_thread,
+        args=(config, st.session_state.message_queue, st.session_state.stop_flag),
+        daemon=True
+    )
+    thread.start()
+    st.session_state.thread = thread
+    st.session_state.loaded_conversation = None
+    st.rerun()
+
 if st.session_state.conversation_running:
     while not st.session_state.message_queue.empty():
         try:
             msg = st.session_state.message_queue.get_nowait()
             if msg.get("type") == "complete":
                 st.session_state.transcript = msg.get("transcript", "")
+                st.session_state.relay_state = msg.get("relay_state")
                 st.session_state.conversation_running = False
             else:
                 st.session_state.messages.append(msg)
@@ -310,7 +414,14 @@ if st.session_state.messages:
     
     if st.session_state.transcript and not st.session_state.conversation_running:
         st.divider()
-        col_dl, col_save = st.columns(2)
+        
+        conv_name = st.text_input(
+            "Conversation name (for saving)",
+            value=st.session_state.conversation_name or f"Phoenix Discussion {datetime.now().strftime('%Y-%m-%d')}",
+            key="save_conv_name"
+        )
+        
+        col_dl, col_save, col_save_conv = st.columns(3)
         
         with col_dl:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -324,11 +435,23 @@ if st.session_state.messages:
             )
         
         with col_save:
-            if st.button("💾 Save to Transcripts Folder", use_container_width=True):
+            if st.button("💾 Save Transcript", use_container_width=True):
                 filepath = os.path.join(TRANSCRIPTS_FOLDER, filename)
                 with open(filepath, "w") as f:
                     f.write(st.session_state.transcript)
-                st.success(f"Saved to {filepath}")
+                st.success(f"Saved!")
+        
+        with col_save_conv:
+            if st.button("💬 Save & Resume Later", use_container_width=True, type="primary"):
+                if st.session_state.relay_state and st.session_state.relay_config:
+                    filepath = save_conversation(
+                        conv_name,
+                        st.session_state.relay_state,
+                        st.session_state.relay_config
+                    )
+                    st.success(f"Conversation saved! You can resume it anytime.")
+                else:
+                    st.error("No conversation state to save")
 
 else:
     st.markdown("""
@@ -342,15 +465,64 @@ else:
     """)
 
 st.divider()
+
+with st.expander("📂 Saved Conversations"):
+    saved_convs = get_saved_conversations()
+    if saved_convs:
+        for conv in saved_convs:
+            col_info, col_load, col_del = st.columns([3, 1, 1])
+            with col_info:
+                st.write(f"**{conv['name']}**")
+                st.caption(f"{conv['message_count']} messages - {conv['created'][:10] if len(conv['created']) > 10 else conv['created']}")
+            with col_load:
+                if st.button("▶️ Resume", key=f"load_{conv['filename']}", use_container_width=True):
+                    loaded = load_conversation(conv['filepath'])
+                    st.session_state.loaded_conversation = loaded
+                    st.session_state.conversation_name = loaded.get("name", "")
+                    
+                    state = loaded.get("state", {})
+                    
+                    st.session_state.messages = []
+                    for msg in state.get("transcript", []):
+                        st.session_state.messages.append({
+                            "speaker": msg["speaker"],
+                            "content": msg["content"],
+                            "timestamp": msg["timestamp"].split(" ")[-1] if " " in msg["timestamp"] else msg["timestamp"]
+                        })
+                    
+                    st.session_state.relay_state = state
+                    st.session_state.transcript = "\n".join([
+                        f"[{m['timestamp']}] {m['speaker']}:\n{m['content']}\n"
+                        for m in state.get("transcript", [])
+                    ])
+                    
+                    config = loaded.get("config", {})
+                    config["resume_state"] = state
+                    config["current_speaker"] = state.get("current_speaker", "grok")
+                    st.session_state.relay_config = config
+                    
+                    st.success(f"Loaded '{conv['name']}' - Click Resume to continue!")
+                    st.rerun()
+            with col_del:
+                if st.button("🗑️", key=f"del_{conv['filename']}", use_container_width=True):
+                    os.remove(conv['filepath'])
+                    st.rerun()
+    else:
+        st.info("No saved conversations yet. Start a conversation and save it to resume later!")
+
+st.divider()
+
 with st.expander("ℹ️ About Constellation Relay"):
     st.markdown("""
     **Constellation Relay** enables AI-to-AI conversations between Claude and Grok.
     
     **Features:**
-    - 📁 Upload context files to give each AI memory and background knowledge
+    - 📁 Upload context files (TXT, MD, PDF) to give each AI memory and background knowledge
     - 🎭 Customize AI names and personalities
     - ⚡ Choose different models for each AI
     - 📜 Download complete conversation transcripts
+    - 💾 Save conversations and resume them later
+    - 🔑 Use your own Anthropic or xAI API keys (optional)
     - 🛑 Stop conversations at any time
     
     **Tips:**
