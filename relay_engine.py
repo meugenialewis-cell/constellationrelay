@@ -15,13 +15,17 @@ class ConversationRelay:
         grok_context: str = "",
         claude_system_prompt: str = "",
         grok_system_prompt: str = "",
-        delay_seconds: int = 5
+        delay_seconds: int = 5,
+        anthropic_api_key: str = None,
+        xai_api_key: str = None
     ):
         self.claude_name = claude_name
         self.grok_name = grok_name
         self.claude_model = claude_model
         self.grok_model = grok_model
         self.delay_seconds = delay_seconds
+        self.anthropic_api_key = anthropic_api_key
+        self.xai_api_key = xai_api_key
         
         self.claude_system = self._build_system_prompt(
             claude_name, grok_name, "Claude", claude_system_prompt, claude_context
@@ -112,7 +116,9 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     response = call_grok(
                         self.grok_messages,
                         self.grok_system,
-                        self.grok_model
+                        self.grok_model,
+                        custom_api_key=self.xai_api_key,
+                        use_direct_xai=bool(self.xai_api_key)
                     )
                     self.add_message("assistant", response, self.grok_name)
                     if on_message:
@@ -122,7 +128,8 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     response = call_claude(
                         self.claude_messages,
                         self.claude_system,
-                        self.claude_model
+                        self.claude_model,
+                        custom_api_key=self.anthropic_api_key
                     )
                     self.add_message("assistant", response, self.claude_name)
                     if on_message:

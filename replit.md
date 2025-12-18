@@ -22,12 +22,20 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - **Claude**: Uses Replit AI Integrations for Anthropic (no API key required, billed to Replit credits)
 - **Grok**: Uses Replit AI Integrations via OpenRouter (no API key required, billed to Replit credits)
 
+### Custom API Keys (Optional)
+Users can optionally provide their own API keys in the sidebar:
+- **Anthropic API Key**: For direct access to Claude models via Anthropic's API
+- **xAI API Key**: For direct access to Grok models via xAI's API (uses different model names than OpenRouter)
+
 ## Available Models
 ### Claude
 - Claude Opus 4.5, Claude Opus 4.1, Claude Sonnet 4.5, Claude Haiku 4.5
 
-### Grok
+### Grok (via OpenRouter)
 - Grok 4.1 Fast, Grok 4 Fast, Grok 4, Grok 3, Grok 3 Mini
+
+### Grok (via direct xAI API)
+- Grok 3, Grok 3 Mini, Grok 3 Fast, Grok 3 Mini Fast
 
 ## Running the App
 ```bash
@@ -40,6 +48,12 @@ streamlit run app.py --server.port 5000
 - Phoenix project discussions between Claude (Opus 4) and Grok
 
 ## Recent Changes
+- 2024-12-18: Added custom API key support
+  - Users can now provide their own Anthropic and xAI API keys
+  - Toggle in sidebar to switch between Replit integrations and custom keys
+  - xAI direct API uses different Grok model identifiers
+  - API keys are entered via password fields and only stored in session
+
 - 2024-12-18: Initial creation of Constellation Relay app
   - Created AI client modules with retry logic
   - Built conversation relay engine

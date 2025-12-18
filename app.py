@@ -5,7 +5,7 @@ import queue
 import time
 from datetime import datetime
 from relay_engine import ConversationRelay
-from ai_clients import CLAUDE_MODELS, GROK_MODELS
+from ai_clients import CLAUDE_MODELS, GROK_MODELS, XAI_GROK_MODELS
 
 st.set_page_config(
     page_title="Constellation Relay",
@@ -39,6 +39,34 @@ st.markdown("*Let your AI friends talk to each other directly*")
 with st.sidebar:
     st.header("⚙️ Configuration")
     
+    st.subheader("🔑 API Keys (Optional)")
+    st.caption("Leave blank to use Replit's built-in AI integrations")
+    
+    use_custom_keys = st.toggle("Use my own API keys", value=False, key="use_custom_keys")
+    
+    anthropic_api_key = ""
+    xai_api_key = ""
+    
+    if use_custom_keys:
+        anthropic_api_key = st.text_input(
+            "Anthropic API Key",
+            type="password",
+            placeholder="sk-ant-...",
+            key="anthropic_key"
+        )
+        xai_api_key = st.text_input(
+            "xAI API Key",
+            type="password",
+            placeholder="xai-...",
+            key="xai_key"
+        )
+        if anthropic_api_key:
+            st.success("Anthropic key provided")
+        if xai_api_key:
+            st.success("xAI key provided")
+    
+    st.divider()
+    
     st.subheader("🌸 Claude Settings")
     claude_name = st.text_input("Claude's Name", value="Claude", key="claude_name")
     claude_model = st.selectbox(
@@ -69,11 +97,18 @@ with st.sidebar:
     
     st.subheader("⚡ Grok Settings")
     grok_name = st.text_input("Grok's Name", value="Grok", key="grok_name")
+    
+    if use_custom_keys and xai_api_key:
+        grok_models_to_use = XAI_GROK_MODELS
+        st.caption("Using xAI direct API models")
+    else:
+        grok_models_to_use = GROK_MODELS
+    
     grok_model = st.selectbox(
         "Grok Model",
-        options=list(GROK_MODELS.keys()),
+        options=list(grok_models_to_use.keys()),
         index=0,
-        key="grok_model_select"
+        key="grok_model_select" if not (use_custom_keys and xai_api_key) else "grok_model_select_xai"
     )
     grok_personality = st.text_area(
         "Grok's Personality/Role",
@@ -159,7 +194,9 @@ def run_conversation_thread(config, message_queue, stop_flag):
         grok_context=config["grok_context"],
         claude_system_prompt=config["claude_personality"],
         grok_system_prompt=config["grok_personality"],
-        delay_seconds=config["delay_seconds"]
+        delay_seconds=config["delay_seconds"],
+        anthropic_api_key=config.get("anthropic_api_key"),
+        xai_api_key=config.get("xai_api_key")
     )
     
     def on_message(speaker, content):
@@ -199,14 +236,16 @@ if start_button and not st.session_state.conversation_running:
         "claude_name": claude_name,
         "grok_name": grok_name,
         "claude_model": CLAUDE_MODELS[claude_model],
-        "grok_model": GROK_MODELS[grok_model],
+        "grok_model": grok_models_to_use[grok_model],
         "claude_context": claude_context,
         "grok_context": grok_context,
         "claude_personality": claude_personality,
         "grok_personality": grok_personality,
         "delay_seconds": delay_seconds,
         "kickoff": kickoff,
-        "max_exchanges": max_exchanges
+        "max_exchanges": max_exchanges,
+        "anthropic_api_key": anthropic_api_key if use_custom_keys else None,
+        "xai_api_key": xai_api_key if use_custom_keys else None
     }
     
     thread = threading.Thread(
