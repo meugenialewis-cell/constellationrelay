@@ -35,7 +35,7 @@ Users can optionally provide their own API keys in the sidebar:
 - Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4, Grok 3, Grok 3 Mini
 
 ### Grok (via direct xAI API)
-- Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 3, Grok 3 Mini, Grok 3 Fast, Grok 3 Mini Fast
+- Grok 4, Grok 4.1 Fast (Reasoning), Grok 4.1 Fast, Grok 4 Fast (Reasoning), Grok 4 Fast, Grok 3, Grok 3 Mini
 
 ## Running the App
 ```bash
