@@ -32,10 +32,10 @@ Users can optionally provide their own API keys in the sidebar:
 - Claude Opus 4.5, Claude Opus 4.1, Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5
 
 ### Grok (via OpenRouter)
-- Grok 4.1 Thinking, Grok 4.1 Fast, Grok 4 Fast, Grok 4, Grok 3, Grok 3 Mini
+- Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4, Grok 3, Grok 3 Mini
 
 ### Grok (via direct xAI API)
-- Grok 4.1 Thinking, Grok 3, Grok 3 Mini, Grok 3 Fast, Grok 3 Mini Fast
+- Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 3, Grok 3 Mini, Grok 3 Fast, Grok 3 Mini Fast
 
 ## Running the App
 ```bash

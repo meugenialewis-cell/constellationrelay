@@ -31,7 +31,9 @@ def get_grok_client(custom_api_key: str = None) -> OpenAI:
     return openrouter_client
 
 XAI_GROK_MODELS = {
-    "Grok 4.1 Thinking": "grok-4.1-thinking",
+    "Grok 4.1": "grok-4.1",
+    "Grok 4.1 Fast": "grok-4.1-fast",
+    "Grok 4.1 Fast (Reasoning)": "grok-4.1-fast-reasoning",
     "Grok 3": "grok-3",
     "Grok 3 Mini": "grok-3-mini",
     "Grok 3 Fast": "grok-3-fast",
@@ -97,8 +99,9 @@ CLAUDE_MODELS = {
 }
 
 GROK_MODELS = {
-    "Grok 4.1 Thinking": "x-ai/grok-4.1-thinking",
+    "Grok 4.1": "x-ai/grok-4.1",
     "Grok 4.1 Fast": "x-ai/grok-4.1-fast",
+    "Grok 4.1 Fast (Reasoning)": "x-ai/grok-4.1-fast-reasoning",
     "Grok 4 Fast": "x-ai/grok-4-fast",
     "Grok 4": "x-ai/grok-4",
     "Grok 3": "x-ai/grok-3",
