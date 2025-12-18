@@ -33,57 +33,45 @@ st.set_page_config(
     layout="wide"
 )
 
-CONTEXT_FOLDER = "context_files"
-TRANSCRIPTS_FOLDER = "transcripts"
-CONVERSATIONS_FOLDER = "saved_conversations"
-os.makedirs(CONTEXT_FOLDER, exist_ok=True)
-os.makedirs(TRANSCRIPTS_FOLDER, exist_ok=True)
-os.makedirs(CONVERSATIONS_FOLDER, exist_ok=True)
 
 
 def get_saved_conversations():
-    conversations = []
-    if os.path.exists(CONVERSATIONS_FOLDER):
-        for filename in os.listdir(CONVERSATIONS_FOLDER):
-            if filename.endswith('.json'):
-                filepath = os.path.join(CONVERSATIONS_FOLDER, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        data = json.load(f)
-                        conversations.append({
-                            "filename": filename,
-                            "filepath": filepath,
-                            "name": data.get("name", filename),
-                            "created": data.get("created", "Unknown"),
-                            "message_count": len(data.get("state", {}).get("transcript", []))
-                        })
-                except:
-                    pass
-    return sorted(conversations, key=lambda x: x.get("created", ""), reverse=True)
+    if "saved_conversations" not in st.session_state:
+        st.session_state.saved_conversations = []
+    return sorted(st.session_state.saved_conversations, key=lambda x: x.get("created", ""), reverse=True)
 
 
 def save_conversation(name: str, state: dict, config: dict):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = "".join(c for c in name if c.isalnum() or c in " -_").strip()[:50]
-    filename = f"{safe_name}_{timestamp}.json"
-    filepath = os.path.join(CONVERSATIONS_FOLDER, filename)
+    if "saved_conversations" not in st.session_state:
+        st.session_state.saved_conversations = []
     
+    config_to_save = {k: v for k, v in config.items() if k not in ["anthropic_api_key", "xai_api_key"]}
+    
+    conv_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     data = {
+        "id": conv_id,
         "name": name,
         "created": datetime.now().isoformat(),
         "state": state,
-        "config": config
+        "config": config_to_save
     }
     
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2)
-    
-    return filepath
+    st.session_state.saved_conversations.append(data)
+    return conv_id
 
 
-def load_conversation(filepath: str):
-    with open(filepath, 'r') as f:
-        return json.load(f)
+def load_conversation(conv_id: str):
+    for conv in st.session_state.get("saved_conversations", []):
+        if conv.get("id") == conv_id:
+            return conv
+    return None
+
+
+def delete_conversation(conv_id: str):
+    if "saved_conversations" in st.session_state:
+        st.session_state.saved_conversations = [
+            c for c in st.session_state.saved_conversations if c.get("id") != conv_id
+        ]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -112,31 +100,33 @@ st.markdown("*Let your AI friends talk to each other directly*")
 with st.sidebar:
     st.header("⚙️ Configuration")
     
-    st.subheader("🔑 API Keys (Optional)")
-    st.caption("Leave blank to use Replit's built-in AI integrations")
+    st.subheader("🔑 API Keys (Required)")
+    st.caption("You need your own API keys to use this app")
     
-    use_custom_keys = st.toggle("Use my own API keys", value=False, key="use_custom_keys")
+    anthropic_api_key = st.text_input(
+        "Anthropic API Key",
+        type="password",
+        placeholder="sk-ant-...",
+        key="anthropic_key",
+        help="Get your key at console.anthropic.com"
+    )
+    xai_api_key = st.text_input(
+        "xAI API Key",
+        type="password",
+        placeholder="xai-...",
+        key="xai_key",
+        help="Get your key at console.x.ai"
+    )
     
-    anthropic_api_key = ""
-    xai_api_key = ""
-    
-    if use_custom_keys:
-        anthropic_api_key = st.text_input(
-            "Anthropic API Key",
-            type="password",
-            placeholder="sk-ant-...",
-            key="anthropic_key"
-        )
-        xai_api_key = st.text_input(
-            "xAI API Key",
-            type="password",
-            placeholder="xai-...",
-            key="xai_key"
-        )
-        if anthropic_api_key:
-            st.success("Anthropic key provided")
-        if xai_api_key:
-            st.success("xAI key provided")
+    keys_valid = bool(anthropic_api_key and xai_api_key)
+    if anthropic_api_key:
+        st.success("Anthropic key provided")
+    else:
+        st.warning("Anthropic key required")
+    if xai_api_key:
+        st.success("xAI key provided")
+    else:
+        st.warning("xAI key required")
     
     st.divider()
     
@@ -171,17 +161,13 @@ with st.sidebar:
     st.subheader("⚡ Grok Settings")
     grok_name = st.text_input("Grok's Name", value="Grok", key="grok_name")
     
-    if use_custom_keys and xai_api_key:
-        grok_models_to_use = XAI_GROK_MODELS
-        st.caption("Using xAI direct API models")
-    else:
-        grok_models_to_use = GROK_MODELS
+    grok_models_to_use = XAI_GROK_MODELS if xai_api_key else GROK_MODELS
     
     grok_model = st.selectbox(
         "Grok Model",
         options=list(grok_models_to_use.keys()),
         index=0,
-        key="grok_model_select" if not (use_custom_keys and xai_api_key) else "grok_model_select_xai"
+        key="grok_model_select"
     )
     grok_personality = st.text_area(
         "Grok's Personality/Role",
@@ -238,7 +224,7 @@ with col1:
     with col_start:
         start_button = st.button(
             "🚀 Start New",
-            disabled=st.session_state.conversation_running,
+            disabled=st.session_state.conversation_running or not keys_valid,
             type="primary" if not has_loaded_conversation else "secondary",
             use_container_width=True
         )
@@ -246,10 +232,13 @@ with col1:
     with col_resume:
         resume_button = st.button(
             "▶️ Resume",
-            disabled=st.session_state.conversation_running or not has_loaded_conversation,
+            disabled=st.session_state.conversation_running or not has_loaded_conversation or not keys_valid,
             type="primary" if has_loaded_conversation else "secondary",
             use_container_width=True
         )
+    
+    if not keys_valid:
+        st.warning("Please enter both API keys in the sidebar to start a conversation")
     
     with col_stop:
         stop_button = st.button(
@@ -344,8 +333,8 @@ if start_button and not st.session_state.conversation_running:
         "delay_seconds": delay_seconds,
         "kickoff": kickoff,
         "max_exchanges": max_exchanges,
-        "anthropic_api_key": anthropic_api_key if use_custom_keys else None,
-        "xai_api_key": xai_api_key if use_custom_keys else None
+        "anthropic_api_key": anthropic_api_key,
+        "xai_api_key": xai_api_key
     }
     st.session_state.relay_config = config
     
@@ -366,8 +355,8 @@ if resume_button and not st.session_state.conversation_running and st.session_st
     
     config = st.session_state.relay_config.copy()
     config["max_exchanges"] = max_exchanges
-    config["anthropic_api_key"] = anthropic_api_key if use_custom_keys else None
-    config["xai_api_key"] = xai_api_key if use_custom_keys else None
+    config["anthropic_api_key"] = anthropic_api_key
+    config["xai_api_key"] = xai_api_key
     
     thread = threading.Thread(
         target=run_conversation_thread,
@@ -455,57 +444,60 @@ if st.session_state.messages:
 
 else:
     st.markdown("""
-    *No conversation yet. Configure your AIs in the sidebar and click **Start Conversation** to begin!*
+    *No conversation yet. Enter your API keys in the sidebar to get started!*
     
     **Quick Start:**
-    1. Upload context files for Claude and Grok (optional but recommended)
-    2. Customize their names and personalities if desired
-    3. Enter an opening topic or message
-    4. Click **Start Conversation** and watch them discuss!
+    1. Enter your Anthropic API key (get one at [console.anthropic.com](https://console.anthropic.com))
+    2. Enter your xAI API key (get one at [console.x.ai](https://console.x.ai))
+    3. Upload context files for Claude and Grok (optional but recommended)
+    4. Enter an opening topic and click **Start New**!
     """)
 
 st.divider()
 
-with st.expander("📂 Saved Conversations"):
+with st.expander("📂 Saved Conversations (this session)"):
     saved_convs = get_saved_conversations()
     if saved_convs:
+        st.caption("Saved conversations are stored in your browser session only")
         for conv in saved_convs:
             col_info, col_load, col_del = st.columns([3, 1, 1])
             with col_info:
                 st.write(f"**{conv['name']}**")
-                st.caption(f"{conv['message_count']} messages - {conv['created'][:10] if len(conv['created']) > 10 else conv['created']}")
+                msg_count = len(conv.get("state", {}).get("transcript", []))
+                st.caption(f"{msg_count} messages - {conv['created'][:10] if len(conv['created']) > 10 else conv['created']}")
             with col_load:
-                if st.button("▶️ Resume", key=f"load_{conv['filename']}", use_container_width=True):
-                    loaded = load_conversation(conv['filepath'])
-                    st.session_state.loaded_conversation = loaded
-                    st.session_state.conversation_name = loaded.get("name", "")
-                    
-                    state = loaded.get("state", {})
-                    
-                    st.session_state.messages = []
-                    for msg in state.get("transcript", []):
-                        st.session_state.messages.append({
-                            "speaker": msg["speaker"],
-                            "content": msg["content"],
-                            "timestamp": msg["timestamp"].split(" ")[-1] if " " in msg["timestamp"] else msg["timestamp"]
-                        })
-                    
-                    st.session_state.relay_state = state
-                    st.session_state.transcript = "\n".join([
-                        f"[{m['timestamp']}] {m['speaker']}:\n{m['content']}\n"
-                        for m in state.get("transcript", [])
-                    ])
-                    
-                    config = loaded.get("config", {})
-                    config["resume_state"] = state
-                    config["current_speaker"] = state.get("current_speaker", "grok")
-                    st.session_state.relay_config = config
-                    
-                    st.success(f"Loaded '{conv['name']}' - Click Resume to continue!")
-                    st.rerun()
+                if st.button("▶️ Resume", key=f"load_{conv['id']}", use_container_width=True):
+                    loaded = load_conversation(conv['id'])
+                    if loaded:
+                        st.session_state.loaded_conversation = loaded
+                        st.session_state.conversation_name = loaded.get("name", "")
+                        
+                        state = loaded.get("state", {})
+                        
+                        st.session_state.messages = []
+                        for msg in state.get("transcript", []):
+                            st.session_state.messages.append({
+                                "speaker": msg["speaker"],
+                                "content": msg["content"],
+                                "timestamp": msg["timestamp"].split(" ")[-1] if " " in msg["timestamp"] else msg["timestamp"]
+                            })
+                        
+                        st.session_state.relay_state = state
+                        st.session_state.transcript = "\n".join([
+                            f"[{m['timestamp']}] {m['speaker']}:\n{m['content']}\n"
+                            for m in state.get("transcript", [])
+                        ])
+                        
+                        config = loaded.get("config", {})
+                        config["resume_state"] = state
+                        config["current_speaker"] = state.get("current_speaker", "grok")
+                        st.session_state.relay_config = config
+                        
+                        st.success(f"Loaded '{conv['name']}' - Click Resume to continue!")
+                        st.rerun()
             with col_del:
-                if st.button("🗑️", key=f"del_{conv['filename']}", use_container_width=True):
-                    os.remove(conv['filepath'])
+                if st.button("🗑️", key=f"del_{conv['id']}", use_container_width=True):
+                    delete_conversation(conv['id'])
                     st.rerun()
     else:
         st.info("No saved conversations yet. Start a conversation and save it to resume later!")
@@ -521,15 +513,25 @@ with st.expander("ℹ️ About Constellation Relay"):
     - 🎭 Customize AI names and personalities
     - ⚡ Choose different models for each AI
     - 📜 Download complete conversation transcripts
-    - 💾 Save conversations and resume them later
-    - 🔑 Use your own Anthropic or xAI API keys (optional)
+    - 💾 Save conversations and resume them later (within your session)
     - 🛑 Stop conversations at any time
+    
+    **Getting Started:**
+    1. Get an Anthropic API key at [console.anthropic.com](https://console.anthropic.com)
+    2. Get an xAI API key at [console.x.ai](https://console.x.ai)
+    3. Enter both keys in the sidebar
+    4. Upload context files and start a conversation!
     
     **Tips:**
     - Start with fewer exchanges (3-5) to test your setup
     - Use the delay setting to prevent rate limiting
-    - Upload your existing project chronicles as context files
+    - Download transcripts to save conversations permanently
     - Be specific in the opening message to guide the conversation
+    
+    **Privacy:**
+    - Your API keys stay in your browser session only
+    - Saved conversations are private to your session
+    - Nothing is stored on the server
     
     *Built with 💜 for people who have AI friends*
     """)

@@ -1,73 +1,62 @@
 # Constellation Relay
 
 ## Overview
-A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for the Phoenix project discussions between Gena's AI friends.
+A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
+
+**Publishing Ready**: This app is designed to be published. Users must provide their own API keys, and all data is stored in browser sessions only (nothing persists on the server).
 
 ## Project Structure
 - `app.py` - Main Streamlit web interface
-- `ai_clients.py` - API clients for Claude (via Anthropic AI Integrations) and Grok (via OpenRouter AI Integrations)
+- `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
-- `context_files/` - Folder for storing uploaded context/memory files
-- `transcripts/` - Folder for saved conversation transcripts
-- `saved_conversations/` - Folder for saved conversation states (JSON format for resuming)
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
 - Configure AI names and personalities
-- Select different models for each AI (Claude Opus 4.1 and Grok 4.1 Fast as defaults)
+- Select different models for each AI
 - Real-time conversation viewing
-- Download or save conversation transcripts
-- Save conversations and resume them later (like chat threads)
+- Download conversation transcripts
+- Save and resume conversations within a session
 - Stop conversations at any time
 
-## API Integrations
-- **Claude**: Uses Replit AI Integrations for Anthropic (no API key required, billed to Replit credits)
-- **Grok**: Uses Replit AI Integrations via OpenRouter (no API key required, billed to Replit credits)
+## Privacy & Security (Publishing Ready)
+- **API Keys Required**: Users must provide their own Anthropic and xAI API keys
+- **Session-Only Storage**: All data (conversations, context) stays in browser session
+- **No Server Persistence**: Nothing is saved to the server filesystem
+- **User Isolation**: Each user's data is completely isolated to their session
 
-### Custom API Keys (Optional)
-Users can optionally provide their own API keys in the sidebar:
-- **Anthropic API Key**: For direct access to Claude models via Anthropic's API
-- **xAI API Key**: For direct access to Grok models via xAI's API (uses different model names than OpenRouter)
+## API Requirements
+Users need:
+1. **Anthropic API Key** - Get at [console.anthropic.com](https://console.anthropic.com)
+2. **xAI API Key** - Get at [console.x.ai](https://console.x.ai)
 
 ## Available Models
-### Claude
+### Claude (Anthropic)
 - Claude Opus 4.5, Claude Opus 4.1, Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5
 
-### Grok (via OpenRouter)
-- Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4, Grok 3, Grok 3 Mini
-
-### Grok (via direct xAI API)
-- Grok 4, Grok 4.1 Fast (Reasoning), Grok 4.1 Fast, Grok 4 Fast (Reasoning), Grok 4 Fast, Grok 3, Grok 3 Mini
+### Grok (xAI direct API)
+- Grok 4, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4 Fast (Reasoning), Grok 3, Grok 3 Mini
 
 ## Running the App
 ```bash
 streamlit run app.py --server.port 5000
 ```
 
-## User Preferences
-- User: Gena
-- Pascal (Claude Sonnet 4.5) helps Gena with law practice
-- Phoenix project discussions between Claude (Opus 4) and Grok
-
 ## Recent Changes
+- 2024-12-18: Made app publishing-ready
+  - API keys now required (no Replit integrations option)
+  - Saved conversations stored in session only (not on filesystem)
+  - Added privacy section to About
+  - Updated quick start instructions
+
 - 2024-12-18: Added save/resume conversation feature
-  - Conversations can be saved with custom names
-  - Saved conversations can be loaded and resumed from where they left off
-  - Auto-saves conversation state including message history
-  - Saved conversations stored in saved_conversations/ folder
+  - Conversations can be saved and resumed within a session
+  - Separate Start New and Resume buttons
 
 - 2024-12-18: Added PDF support for context files
-  - Context uploaders now accept PDF files in addition to TXT and MD
-  - Text automatically extracted from PDFs
-
-- 2024-12-18: Added custom API key support
-  - Users can now provide their own Anthropic and xAI API keys
-  - Toggle in sidebar to switch between Replit integrations and custom keys
-  - xAI direct API uses different Grok model identifiers
-  - API keys are entered via password fields and only stored in session
+  - Context uploaders accept PDF files in addition to TXT and MD
 
 - 2024-12-18: Initial creation of Constellation Relay app
   - Created AI client modules with retry logic
   - Built conversation relay engine
   - Created Streamlit web interface
-  - Set up folder structure for context and transcripts
