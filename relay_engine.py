@@ -1,8 +1,22 @@
 import time
 import json
+import os
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Optional
 from ai_clients import call_claude, call_grok
+
+
+def try_import_memory():
+    """Try to import memory system, return None if unavailable."""
+    try:
+        from memory_system import hydrate_context, extract_and_store_memories, init_memory_schema
+        return {
+            "hydrate": hydrate_context,
+            "extract": extract_and_store_memories,
+            "init": init_memory_schema
+        }
+    except Exception:
+        return None
 
 
 class ConversationRelay:
@@ -18,7 +32,8 @@ class ConversationRelay:
         grok_system_prompt: str = "",
         delay_seconds: int = 5,
         anthropic_api_key: str = None,
-        xai_api_key: str = None
+        xai_api_key: str = None,
+        use_persistent_memory: bool = False
     ):
         self.claude_name = claude_name
         self.grok_name = grok_name
@@ -27,12 +42,35 @@ class ConversationRelay:
         self.delay_seconds = delay_seconds
         self.anthropic_api_key = anthropic_api_key
         self.xai_api_key = xai_api_key
+        self.use_persistent_memory = use_persistent_memory
+        self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        self.memory_system = try_import_memory() if use_persistent_memory else None
+        memory_context = ""
+        if self.memory_system and use_persistent_memory:
+            try:
+                self.memory_system["init"]()
+                memory_context = self.memory_system["hydrate"](memory_limit=10)
+            except Exception:
+                pass
+        
+        full_claude_context = claude_context
+        full_grok_context = grok_context
+        if memory_context:
+            if full_claude_context:
+                full_claude_context = f"{memory_context}\n\n{full_claude_context}"
+            else:
+                full_claude_context = memory_context
+            if full_grok_context:
+                full_grok_context = f"{memory_context}\n\n{full_grok_context}"
+            else:
+                full_grok_context = memory_context
         
         self.claude_system = self._build_system_prompt(
-            claude_name, grok_name, "Claude", claude_system_prompt, claude_context
+            claude_name, grok_name, "Claude", claude_system_prompt, full_claude_context
         )
         self.grok_system = self._build_system_prompt(
-            grok_name, claude_name, "Grok", grok_system_prompt, grok_context
+            grok_name, claude_name, "Grok", grok_system_prompt, full_grok_context
         )
         
         self.claude_messages = []
@@ -152,6 +190,18 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                 break
         
         self.running = False
+        
+        if self.use_persistent_memory and self.memory_system:
+            try:
+                self.memory_system["extract"](
+                    self.transcript,
+                    self.conversation_id,
+                    self.claude_name,
+                    self.grok_name
+                )
+            except Exception:
+                pass
+        
         return self.transcript
     
     def get_transcript_text(self) -> str:
@@ -243,4 +293,16 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                 break
         
         self.running = False
+        
+        if self.use_persistent_memory and self.memory_system:
+            try:
+                self.memory_system["extract"](
+                    self.transcript,
+                    self.conversation_id,
+                    self.claude_name,
+                    self.grok_name
+                )
+            except Exception:
+                pass
+        
         return self.transcript

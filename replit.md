@@ -3,12 +3,13 @@
 ## Overview
 A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
 
-**Publishing Ready**: This app is designed to be published. Users must provide their own API keys, and all data is stored in browser sessions only (nothing persists on the server).
+**Personal Use Version**: This version includes persistent memory storage for Claude and Grok to remember past conversations together.
 
 ## Project Structure
 - `app.py` - Main Streamlit web interface
 - `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
+- `memory_system.py` - Persistent memory storage inspired by QuixiAI/agi-memory
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
@@ -18,12 +19,19 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Download conversation transcripts
 - Save and resume conversations within a session
 - Stop conversations at any time
+- **Persistent Memory**: Claude and Grok remember past conversations
 
-## Privacy & Security (Publishing Ready)
-- **API Keys Required**: Users must provide their own Anthropic and xAI API keys
-- **Session-Only Storage**: All data (conversations, context) stays in browser session
-- **No Server Persistence**: Nothing is saved to the server filesystem
-- **User Isolation**: Each user's data is completely isolated to their session
+## Memory System
+Inspired by [QuixiAI/agi-memory](https://github.com/QuixiAI/agi-memory), the memory system provides:
+- **Episodic Memory**: Event-based memories from conversations
+- **Semantic Memory**: Facts and knowledge extracted from discussions
+- **Relational Memory**: Connections between Claude and Grok
+- **Memory Hydration**: Relevant memories are injected into conversations
+- **Importance Scoring**: Key moments are marked as important
+
+## Two Versions
+1. **Personal Use (current)**: Persistent memory enabled, uses PostgreSQL database
+2. **Published Version**: Session-only storage, requires users to provide their own API keys
 
 ## API Requirements
 Users need:
@@ -43,6 +51,12 @@ streamlit run app.py --server.port 5000
 ```
 
 ## Recent Changes
+- 2024-12-19: Integrated persistent memory system
+  - Added memory_system.py inspired by QuixiAI/agi-memory
+  - Conversations are stored in PostgreSQL database
+  - Claude and Grok can recall past discussions
+  - Memory Bank UI to view and manage memories
+
 - 2024-12-18: Made app publishing-ready
   - API keys now required (no Replit integrations option)
   - Saved conversations stored in session only (not on filesystem)
