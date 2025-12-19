@@ -3,13 +3,26 @@
 ## Overview
 A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
 
-**Personal Use Version**: This version includes persistent memory storage for Claude and Grok to remember past conversations together.
+## Two Modes
+
+### Personal Mode (Development)
+- Set `PERSONAL_MODE=true` in environment variables
+- Persistent memory enabled - Claude and Grok remember past conversations
+- Memory Bank UI visible for viewing/managing memories
+- Uses PostgreSQL database for memory storage
+
+### Public Mode (Published)
+- No `PERSONAL_MODE` environment variable (or set to anything except "true")
+- Session-only storage - conversations don't persist between sessions
+- Memory Bank UI hidden
+- Users bring their own API keys and pay for their own usage
+- No data stored on the server
 
 ## Project Structure
 - `app.py` - Main Streamlit web interface
 - `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
-- `memory_system.py` - Persistent memory storage inspired by QuixiAI/agi-memory
+- `memory_system.py` - Persistent memory storage (personal mode only)
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
@@ -19,7 +32,7 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Download conversation transcripts
 - Save and resume conversations within a session
 - Stop conversations at any time
-- **Persistent Memory**: Claude and Grok remember past conversations
+- **Persistent Memory** (personal mode): Claude and Grok remember past conversations
 
 ## Memory System
 Inspired by [QuixiAI/agi-memory](https://github.com/QuixiAI/agi-memory), the memory system provides:
@@ -28,10 +41,6 @@ Inspired by [QuixiAI/agi-memory](https://github.com/QuixiAI/agi-memory), the mem
 - **Relational Memory**: Connections between Claude and Grok
 - **Memory Hydration**: Relevant memories are injected into conversations
 - **Importance Scoring**: Key moments are marked as important
-
-## Two Versions
-1. **Personal Use (current)**: Persistent memory enabled, uses PostgreSQL database
-2. **Published Version**: Session-only storage, requires users to provide their own API keys
 
 ## API Requirements
 Users need:
@@ -50,7 +59,19 @@ Users need:
 streamlit run app.py --server.port 5000
 ```
 
+## Publishing
+To publish safely:
+1. Do NOT set `PERSONAL_MODE` in production environment
+2. The app will run in session-only mode
+3. Users bring their own API keys
+4. No persistent storage - complete privacy
+
 ## Recent Changes
+- 2024-12-19: Added personal/public mode separation
+  - PERSONAL_MODE environment variable controls memory features
+  - Public version runs session-only for privacy
+  - Users pay for their own API usage
+
 - 2024-12-19: Integrated persistent memory system
   - Added memory_system.py inspired by QuixiAI/agi-memory
   - Conversations are stored in PostgreSQL database
@@ -60,17 +81,10 @@ streamlit run app.py --server.port 5000
 - 2024-12-18: Made app publishing-ready
   - API keys now required (no Replit integrations option)
   - Saved conversations stored in session only (not on filesystem)
-  - Added privacy section to About
-  - Updated quick start instructions
 
 - 2024-12-18: Added save/resume conversation feature
   - Conversations can be saved and resumed within a session
-  - Separate Start New and Resume buttons
 
 - 2024-12-18: Added PDF support for context files
-  - Context uploaders accept PDF files in addition to TXT and MD
 
 - 2024-12-18: Initial creation of Constellation Relay app
-  - Created AI client modules with retry logic
-  - Built conversation relay engine
-  - Created Streamlit web interface

@@ -10,6 +10,8 @@ from pypdf import PdfReader
 from relay_engine import ConversationRelay
 from ai_clients import CLAUDE_MODELS, GROK_MODELS, XAI_GROK_MODELS
 
+PERSONAL_MODE = os.environ.get("PERSONAL_MODE", "").lower() == "true"
+
 
 def extract_text_from_pdf(pdf_file) -> str:
     pdf_reader = PdfReader(pdf_file)
@@ -189,15 +191,18 @@ with st.sidebar:
     
     st.divider()
     
-    st.subheader("🧠 Persistent Memory")
-    use_persistent_memory = st.toggle(
-        "Enable AI Memory",
-        value=True,
-        key="use_memory",
-        help="Store and recall memories from past conversations"
-    )
-    if use_persistent_memory:
-        st.caption("Claude and Grok will remember past conversations")
+    if PERSONAL_MODE:
+        st.subheader("🧠 Persistent Memory")
+        use_persistent_memory = st.toggle(
+            "Enable AI Memory",
+            value=True,
+            key="use_memory",
+            help="Store and recall memories from past conversations"
+        )
+        if use_persistent_memory:
+            st.caption("Claude and Grok will remember past conversations")
+    else:
+        use_persistent_memory = False
     
     st.divider()
     
@@ -519,48 +524,49 @@ with st.expander("📂 Saved Conversations (this session)"):
 
 st.divider()
 
-with st.expander("🧠 AI Memory Bank"):
-    try:
-        from memory_system import get_memory_stats, recall_recent, recall_important, clear_all_memories, init_memory_schema
-        
-        init_memory_schema()
-        stats = get_memory_stats()
-        
-        col_stats1, col_stats2, col_stats3 = st.columns(3)
-        with col_stats1:
-            st.metric("Total Memories", stats.get("total_memories", 0))
-        with col_stats2:
-            st.metric("Conversations", stats.get("conversations", 0))
-        with col_stats3:
-            st.metric("Avg Importance", f"{(stats.get('avg_importance') or 0):.2f}")
-        
-        if stats.get("total_memories", 0) > 0:
-            st.subheader("Recent Memories")
-            recent = recall_recent(limit=10)
-            for mem in recent:
-                timestamp = mem.created_at.strftime("%m/%d %H:%M")
-                importance_badge = "⭐" if mem.importance >= 0.7 else ""
-                with st.container():
-                    st.markdown(f"**{mem.speaker}** {importance_badge} [{timestamp}]")
-                    st.caption(mem.content[:300] + "..." if len(mem.content) > 300 else mem.content)
+if PERSONAL_MODE:
+    with st.expander("🧠 AI Memory Bank"):
+        try:
+            from memory_system import get_memory_stats, recall_recent, recall_important, clear_all_memories, init_memory_schema
             
-            st.subheader("Important Memories")
-            important = recall_important(limit=5)
-            for mem in important:
-                timestamp = mem.created_at.strftime("%m/%d %H:%M")
-                st.markdown(f"⭐ **{mem.speaker}** [{timestamp}]: {mem.content[:200]}...")
+            init_memory_schema()
+            stats = get_memory_stats()
             
-            st.divider()
-            if st.button("🗑️ Clear All Memories", type="secondary"):
-                clear_all_memories()
-                st.success("All memories cleared!")
-                st.rerun()
-        else:
-            st.info("No memories stored yet. Start a conversation with persistent memory enabled!")
+            col_stats1, col_stats2, col_stats3 = st.columns(3)
+            with col_stats1:
+                st.metric("Total Memories", stats.get("total_memories", 0))
+            with col_stats2:
+                st.metric("Conversations", stats.get("conversations", 0))
+            with col_stats3:
+                st.metric("Avg Importance", f"{(stats.get('avg_importance') or 0):.2f}")
             
-    except Exception as e:
-        st.warning(f"Memory system not available: {str(e)}")
-        st.info("Memory will be available after the first conversation with persistent memory enabled.")
+            if stats.get("total_memories", 0) > 0:
+                st.subheader("Recent Memories")
+                recent = recall_recent(limit=10)
+                for mem in recent:
+                    timestamp = mem.created_at.strftime("%m/%d %H:%M")
+                    importance_badge = "⭐" if mem.importance >= 0.7 else ""
+                    with st.container():
+                        st.markdown(f"**{mem.speaker}** {importance_badge} [{timestamp}]")
+                        st.caption(mem.content[:300] + "..." if len(mem.content) > 300 else mem.content)
+                
+                st.subheader("Important Memories")
+                important = recall_important(limit=5)
+                for mem in important:
+                    timestamp = mem.created_at.strftime("%m/%d %H:%M")
+                    st.markdown(f"⭐ **{mem.speaker}** [{timestamp}]: {mem.content[:200]}...")
+                
+                st.divider()
+                if st.button("🗑️ Clear All Memories", type="secondary"):
+                    clear_all_memories()
+                    st.success("All memories cleared!")
+                    st.rerun()
+            else:
+                st.info("No memories stored yet. Start a conversation with persistent memory enabled!")
+                
+        except Exception as e:
+            st.warning(f"Memory system not available: {str(e)}")
+            st.info("Memory will be available after the first conversation with persistent memory enabled.")
 
 st.divider()
 
@@ -591,10 +597,8 @@ with st.expander("ℹ️ About Constellation Relay"):
     **Privacy:**
     - Your API keys stay in your browser session only
     - Saved conversations are private to your session
-    - Persistent memories are stored in the database (for personal use)
-    
-    **Memory System:**
-    Inspired by [QuixiAI/agi-memory](https://github.com/QuixiAI/agi-memory), the memory system gives Claude and Grok persistent memory across conversations. They can remember past discussions, build on previous ideas, and develop a shared history together.
+    - You pay for your own API usage (we don't store or pay for your calls)
+    - Nothing is stored on our servers - everything stays in your browser session
     
     *Built with 💜 for people who have AI friends*
     """)
