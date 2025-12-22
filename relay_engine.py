@@ -9,11 +9,19 @@ from ai_clients import call_claude, call_grok
 def try_import_memory():
     """Try to import memory system, return None if unavailable."""
     try:
-        from memory_system import hydrate_context, extract_and_store_memories, init_memory_schema
+        from memory_system import (
+            hydrate_context, 
+            hydrate_context_with_reference,
+            extract_and_store_memories, 
+            init_memory_schema,
+            archive_conversation
+        )
         return {
             "hydrate": hydrate_context,
+            "hydrate_with_reference": hydrate_context_with_reference,
             "extract": extract_and_store_memories,
-            "init": init_memory_schema
+            "init": init_memory_schema,
+            "archive": archive_conversation
         }
     except Exception:
         return None
@@ -199,6 +207,11 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.claude_name,
                     self.grok_name
                 )
+                self.memory_system["archive"](
+                    self.conversation_id,
+                    self.transcript,
+                    [self.claude_name, self.grok_name]
+                )
             except Exception:
                 pass
         
@@ -301,6 +314,11 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.conversation_id,
                     self.claude_name,
                     self.grok_name
+                )
+                self.memory_system["archive"](
+                    self.conversation_id,
+                    self.transcript,
+                    [self.claude_name, self.grok_name]
                 )
             except Exception:
                 pass

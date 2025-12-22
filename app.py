@@ -525,7 +525,7 @@ with st.expander("📂 Saved Conversations (this session)"):
 st.divider()
 
 if PERSONAL_MODE:
-    with st.expander("🧠 AI Memory Bank"):
+    with st.expander("🧠 Long-Term Memory"):
         try:
             from memory_system import get_memory_stats, recall_recent, recall_important, clear_all_memories, init_memory_schema
             
@@ -557,9 +557,9 @@ if PERSONAL_MODE:
                     st.markdown(f"⭐ **{mem.speaker}** [{timestamp}]: {mem.content[:200]}...")
                 
                 st.divider()
-                if st.button("🗑️ Clear All Memories", type="secondary"):
+                if st.button("🗑️ Clear Long-Term Memory", type="secondary"):
                     clear_all_memories()
-                    st.success("All memories cleared!")
+                    st.success("Long-term memory cleared!")
                     st.rerun()
             else:
                 st.info("No memories stored yet. Start a conversation with persistent memory enabled!")
@@ -567,6 +567,90 @@ if PERSONAL_MODE:
         except Exception as e:
             st.warning(f"Memory system not available: {str(e)}")
             st.info("Memory will be available after the first conversation with persistent memory enabled.")
+    
+    with st.expander("📚 Reference Archive (Complete Diary)"):
+        try:
+            from memory_system import (
+                get_reference_stats, 
+                get_reference_conversations, 
+                get_conversation_transcript,
+                search_reference_archive,
+                search_reference_simple,
+                clear_reference_archive
+            )
+            
+            ref_stats = get_reference_stats()
+            
+            col_r1, col_r2, col_r3 = st.columns(3)
+            with col_r1:
+                st.metric("Archived Conversations", ref_stats.get("total_conversations") or 0)
+            with col_r2:
+                st.metric("Total Messages", ref_stats.get("total_messages") or 0)
+            with col_r3:
+                st.metric("Total Words", ref_stats.get("total_words") or 0)
+            
+            st.subheader("Search the Archive")
+            search_query = st.text_input("Search past conversations", placeholder="e.g., Phoenix, project goals, ideas...")
+            
+            if search_query:
+                results = search_reference_archive(search_query, limit=10)
+                if not results:
+                    results = search_reference_simple(search_query, limit=10)
+                
+                if results:
+                    st.success(f"Found {len(results)} matching excerpts")
+                    for r in results:
+                        date = r["conversation_date"].strftime("%Y-%m-%d") if r.get("conversation_date") else ""
+                        st.markdown(f"**{r['speaker']}** [{date}]")
+                        st.caption(r["content"][:400] + "..." if len(r["content"]) > 400 else r["content"])
+                        st.markdown("---")
+                else:
+                    st.info("No matches found. Try different keywords.")
+            
+            st.subheader("Recent Conversations")
+            conversations = get_reference_conversations(limit=10)
+            
+            if conversations:
+                for conv in conversations:
+                    date = conv.created_at.strftime("%Y-%m-%d %H:%M")
+                    participants = ", ".join(conv.participants) if conv.participants else "Unknown"
+                    with st.container():
+                        col_info, col_view = st.columns([3, 1])
+                        with col_info:
+                            title = conv.title or f"Conversation {conv.conversation_id}"
+                            st.markdown(f"**{title}** [{date}]")
+                            st.caption(f"{participants} - {conv.message_count} messages")
+                        with col_view:
+                            if st.button("View", key=f"view_{conv.conversation_id}"):
+                                st.session_state[f"show_transcript_{conv.conversation_id}"] = True
+                        
+                        if st.session_state.get(f"show_transcript_{conv.conversation_id}"):
+                            messages = get_conversation_transcript(conv.conversation_id)
+                            transcript_text = "\n\n".join([
+                                f"[{m.timestamp}] {m.speaker}:\n{m.content}" 
+                                for m in messages
+                            ])
+                            st.text_area(
+                                "Full Transcript",
+                                value=transcript_text,
+                                height=300,
+                                key=f"transcript_{conv.conversation_id}"
+                            )
+                            if st.button("Hide", key=f"hide_{conv.conversation_id}"):
+                                st.session_state[f"show_transcript_{conv.conversation_id}"] = False
+                                st.rerun()
+                
+                st.divider()
+                if st.button("🗑️ Clear Reference Archive", type="secondary"):
+                    clear_reference_archive()
+                    st.success("Reference archive cleared!")
+                    st.rerun()
+            else:
+                st.info("No conversations archived yet. Complete a conversation with persistent memory enabled!")
+                
+        except Exception as e:
+            st.warning(f"Reference archive not available: {str(e)}")
+            st.info("Archive will be available after the first completed conversation.")
 
 st.divider()
 
