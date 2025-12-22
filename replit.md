@@ -3,26 +3,43 @@
 ## Overview
 A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
 
+## Three-Tier Memory System
+
+### 1. Short-Term Memory
+- Current conversation context window
+- Managed automatically by the AI during conversation
+
+### 2. Long-Term Memory
+- Adaptive memory with importance scoring
+- Extracts key insights from conversations
+- Stores episodic, semantic, and relational memories
+- Used to hydrate context for new conversations
+
+### 3. Reference Memory (Complete Diary)
+- Archives every complete conversation
+- Searchable by keyword using PostgreSQL full-text search
+- Claude and Grok can query this when they need specific details
+- Like a perfect diary with total recall
+
 ## Two Modes
 
 ### Personal Mode (Development)
 - Set `PERSONAL_MODE=true` in environment variables
-- Persistent memory enabled - Claude and Grok remember past conversations
-- Memory Bank UI visible for viewing/managing memories
-- Uses PostgreSQL database for memory storage
+- All three memory tiers enabled
+- Memory Bank and Reference Archive UI visible
+- Uses PostgreSQL database for storage
 
 ### Public Mode (Published)
-- No `PERSONAL_MODE` environment variable (or set to anything except "true")
-- Session-only storage - conversations don't persist between sessions
-- Memory Bank UI hidden
+- No `PERSONAL_MODE` environment variable
+- Session-only storage - conversations don't persist
+- Memory features hidden
 - Users bring their own API keys and pay for their own usage
-- No data stored on the server
 
 ## Project Structure
 - `app.py` - Main Streamlit web interface
 - `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
-- `memory_system.py` - Persistent memory storage (personal mode only)
+- `memory_system.py` - Three-tier memory system (long-term + reference)
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
@@ -32,15 +49,8 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Download conversation transcripts
 - Save and resume conversations within a session
 - Stop conversations at any time
-- **Persistent Memory** (personal mode): Claude and Grok remember past conversations
-
-## Memory System
-Inspired by [QuixiAI/agi-memory](https://github.com/QuixiAI/agi-memory), the memory system provides:
-- **Episodic Memory**: Event-based memories from conversations
-- **Semantic Memory**: Facts and knowledge extracted from discussions
-- **Relational Memory**: Connections between Claude and Grok
-- **Memory Hydration**: Relevant memories are injected into conversations
-- **Importance Scoring**: Key moments are marked as important
+- **Long-Term Memory**: Adaptive memory with importance scoring
+- **Reference Archive**: Complete searchable diary of all conversations
 
 ## API Requirements
 Users need:
@@ -67,6 +77,12 @@ To publish safely:
 4. No persistent storage - complete privacy
 
 ## Recent Changes
+- 2024-12-19: Added three-tier memory system
+  - Short-term: conversation context (existing)
+  - Long-term: adaptive memory with importance scoring
+  - Reference: complete searchable archive of all conversations
+  - Reference Archive UI with search and transcript viewing
+
 - 2024-12-19: Added personal/public mode separation
   - PERSONAL_MODE environment variable controls memory features
   - Public version runs session-only for privacy
@@ -74,17 +90,7 @@ To publish safely:
 
 - 2024-12-19: Integrated persistent memory system
   - Added memory_system.py inspired by QuixiAI/agi-memory
-  - Conversations are stored in PostgreSQL database
+  - Conversations stored in PostgreSQL database
   - Claude and Grok can recall past discussions
-  - Memory Bank UI to view and manage memories
-
-- 2024-12-18: Made app publishing-ready
-  - API keys now required (no Replit integrations option)
-  - Saved conversations stored in session only (not on filesystem)
-
-- 2024-12-18: Added save/resume conversation feature
-  - Conversations can be saved and resumed within a session
-
-- 2024-12-18: Added PDF support for context files
 
 - 2024-12-18: Initial creation of Constellation Relay app

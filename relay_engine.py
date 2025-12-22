@@ -58,9 +58,15 @@ class ConversationRelay:
         if self.memory_system and use_persistent_memory:
             try:
                 self.memory_system["init"]()
-                memory_context = self.memory_system["hydrate"](memory_limit=10)
+                memory_context = self.memory_system["hydrate_with_reference"](
+                    memory_limit=10,
+                    include_reference=True
+                )
             except Exception:
-                pass
+                try:
+                    memory_context = self.memory_system["hydrate"](memory_limit=10)
+                except Exception:
+                    pass
         
         full_claude_context = claude_context
         full_grok_context = grok_context
@@ -207,10 +213,15 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.claude_name,
                     self.grok_name
                 )
+                title = None
+                if self.transcript:
+                    first_msg = self.transcript[0].get("content", "")[:100]
+                    title = f"{self.claude_name} & {self.grok_name}: {first_msg}..."
                 self.memory_system["archive"](
                     self.conversation_id,
                     self.transcript,
-                    [self.claude_name, self.grok_name]
+                    [self.claude_name, self.grok_name],
+                    title=title
                 )
             except Exception:
                 pass
@@ -315,10 +326,15 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.claude_name,
                     self.grok_name
                 )
+                title = None
+                if self.transcript:
+                    first_msg = self.transcript[0].get("content", "")[:100]
+                    title = f"{self.claude_name} & {self.grok_name}: {first_msg}..."
                 self.memory_system["archive"](
                     self.conversation_id,
                     self.transcript,
-                    [self.claude_name, self.grok_name]
+                    [self.claude_name, self.grok_name],
+                    title=title
                 )
             except Exception:
                 pass
