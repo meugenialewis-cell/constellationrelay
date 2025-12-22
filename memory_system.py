@@ -1,10 +1,15 @@
 """
-Simplified Cognitive Memory System for Constellation Relay
+Three-Tier Cognitive Memory System for Constellation Relay
 
 Inspired by QuixiAI/agi-memory, adapted to work with Replit's PostgreSQL.
 Provides persistent memory storage for AI-to-AI conversations.
 
-Memory Types:
+Memory Tiers:
+1. SHORT-TERM: Current conversation context window (handled by the AI itself)
+2. LONG-TERM: Adaptive memory with importance scoring (this module)
+3. REFERENCE: Complete archive of all conversations (searchable diary)
+
+Memory Types (within Long-Term):
 - EPISODIC: Event-based memories from conversations
 - SEMANTIC: Facts and knowledge extracted from discussions
 - RELATIONAL: Connections between Claude and Grok
@@ -115,6 +120,36 @@ def init_memory_schema():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+                
+                -- Reference Memory: Complete conversation archive
+                CREATE TABLE IF NOT EXISTS reference_conversations (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id VARCHAR(100) UNIQUE NOT NULL,
+                    title VARCHAR(255),
+                    participants TEXT[],
+                    full_transcript TEXT NOT NULL,
+                    message_count INTEGER DEFAULT 0,
+                    total_tokens INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_ref_conv_created ON reference_conversations(created_at DESC);
+                
+                CREATE TABLE IF NOT EXISTS reference_messages (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id VARCHAR(100) NOT NULL,
+                    speaker VARCHAR(100) NOT NULL,
+                    content TEXT NOT NULL,
+                    message_index INTEGER NOT NULL,
+                    timestamp VARCHAR(50),
+                    search_vector tsvector,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_ref_msg_conv ON reference_messages(conversation_id);
+                CREATE INDEX IF NOT EXISTS idx_ref_msg_speaker ON reference_messages(speaker);
+                CREATE INDEX IF NOT EXISTS idx_ref_msg_search ON reference_messages USING GIN(search_vector);
             """)
             conn.commit()
     finally:
@@ -424,6 +459,319 @@ def clear_all_memories():
             cur.execute("DELETE FROM memory_relationships")
             cur.execute("DELETE FROM memories")
             cur.execute("DELETE FROM conversation_summaries")
+            conn.commit()
+    finally:
+        conn.close()
+
+
+# ============================================
+# REFERENCE MEMORY (Tier 3): Complete Archive
+# ============================================
+
+@dataclass
+class ReferenceConversation:
+    id: int
+    conversation_id: str
+    title: Optional[str]
+    participants: List[str]
+    message_count: int
+    created_at: datetime
+    
+    @classmethod
+    def from_row(cls, row: dict) -> "ReferenceConversation":
+        return cls(
+            id=row["id"],
+            conversation_id=row["conversation_id"],
+            title=row.get("title"),
+            participants=row.get("participants", []),
+            message_count=row.get("message_count", 0),
+            created_at=row["created_at"]
+        )
+
+
+@dataclass
+class ReferenceMessage:
+    id: int
+    conversation_id: str
+    speaker: str
+    content: str
+    message_index: int
+    timestamp: Optional[str]
+    
+    @classmethod
+    def from_row(cls, row: dict) -> "ReferenceMessage":
+        return cls(
+            id=row["id"],
+            conversation_id=row["conversation_id"],
+            speaker=row["speaker"],
+            content=row["content"],
+            message_index=row["message_index"],
+            timestamp=row.get("timestamp")
+        )
+
+
+def archive_conversation(
+    conversation_id: str,
+    transcript: List[Dict[str, Any]],
+    participants: List[str],
+    title: Optional[str] = None
+):
+    """
+    Archive a complete conversation to Reference Memory.
+    This stores the full transcript for later searching.
+    """
+    if not transcript:
+        return
+    
+    full_text_parts = []
+    for msg in transcript:
+        speaker = msg.get("speaker", "Unknown")
+        content = msg.get("content", "")
+        timestamp = msg.get("timestamp", "")
+        full_text_parts.append(f"[{timestamp}] {speaker}: {content}")
+    
+    full_transcript = "\n\n".join(full_text_parts)
+    
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO reference_conversations 
+                (conversation_id, title, participants, full_transcript, message_count, total_tokens)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (conversation_id) 
+                DO UPDATE SET 
+                    full_transcript = EXCLUDED.full_transcript,
+                    message_count = EXCLUDED.message_count,
+                    total_tokens = EXCLUDED.total_tokens,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                conversation_id,
+                title,
+                participants,
+                full_transcript,
+                len(transcript),
+                len(full_transcript.split())
+            ))
+            
+            cur.execute("DELETE FROM reference_messages WHERE conversation_id = %s", (conversation_id,))
+            
+            for idx, msg in enumerate(transcript):
+                content = msg.get("content", "")
+                cur.execute("""
+                    INSERT INTO reference_messages 
+                    (conversation_id, speaker, content, message_index, timestamp, search_vector)
+                    VALUES (%s, %s, %s, %s, %s, to_tsvector('english', %s))
+                """, (
+                    conversation_id,
+                    msg.get("speaker", "Unknown"),
+                    content,
+                    idx,
+                    msg.get("timestamp"),
+                    content
+                ))
+            
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def search_reference_archive(
+    search_query: str,
+    limit: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Search the Reference Memory archive using full-text search.
+    Returns matching message excerpts with context.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    rm.id,
+                    rm.conversation_id,
+                    rm.speaker,
+                    rm.content,
+                    rm.timestamp,
+                    rm.message_index,
+                    rc.title as conversation_title,
+                    rc.created_at as conversation_date,
+                    ts_rank(rm.search_vector, plainto_tsquery('english', %s)) as rank
+                FROM reference_messages rm
+                JOIN reference_conversations rc ON rm.conversation_id = rc.conversation_id
+                WHERE rm.search_vector @@ plainto_tsquery('english', %s)
+                ORDER BY rank DESC, rc.created_at DESC
+                LIMIT %s
+            """, (search_query, search_query, limit))
+            
+            results = []
+            for row in cur.fetchall():
+                results.append({
+                    "speaker": row["speaker"],
+                    "content": row["content"],
+                    "timestamp": row["timestamp"],
+                    "conversation_id": row["conversation_id"],
+                    "conversation_title": row["conversation_title"],
+                    "conversation_date": row["conversation_date"],
+                    "relevance": float(row["rank"])
+                })
+            return results
+    finally:
+        conn.close()
+
+
+def search_reference_simple(
+    search_term: str,
+    limit: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Simple ILIKE search for Reference Memory (fallback if FTS fails).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    rm.speaker,
+                    rm.content,
+                    rm.timestamp,
+                    rm.conversation_id,
+                    rc.title as conversation_title,
+                    rc.created_at as conversation_date
+                FROM reference_messages rm
+                JOIN reference_conversations rc ON rm.conversation_id = rc.conversation_id
+                WHERE rm.content ILIKE %s
+                ORDER BY rc.created_at DESC
+                LIMIT %s
+            """, (f"%{search_term}%", limit))
+            
+            results = []
+            for row in cur.fetchall():
+                results.append({
+                    "speaker": row["speaker"],
+                    "content": row["content"],
+                    "timestamp": row["timestamp"],
+                    "conversation_id": row["conversation_id"],
+                    "conversation_title": row["conversation_title"],
+                    "conversation_date": row["conversation_date"],
+                    "relevance": 1.0
+                })
+            return results
+    finally:
+        conn.close()
+
+
+def get_reference_conversations(limit: int = 20) -> List[ReferenceConversation]:
+    """Get list of archived conversations."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, conversation_id, title, participants, message_count, created_at
+                FROM reference_conversations
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+            return [ReferenceConversation.from_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_conversation_transcript(conversation_id: str) -> List[ReferenceMessage]:
+    """Get full transcript of a specific conversation."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM reference_messages
+                WHERE conversation_id = %s
+                ORDER BY message_index
+            """, (conversation_id,))
+            return [ReferenceMessage.from_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_reference_stats() -> Dict[str, Any]:
+    """Get statistics about the Reference Memory archive."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    COUNT(*) as total_conversations,
+                    SUM(message_count) as total_messages,
+                    SUM(total_tokens) as total_words
+                FROM reference_conversations
+            """)
+            stats = dict(cur.fetchone())
+            return stats
+    finally:
+        conn.close()
+
+
+def hydrate_context_with_reference(
+    topic: Optional[str] = None,
+    speaker: Optional[str] = None,
+    memory_limit: int = 15,
+    include_reference: bool = True
+) -> str:
+    """
+    Hydrate context for a conversation including Reference Memory.
+    Returns a formatted string for injecting into AI prompts.
+    """
+    context_parts = []
+    
+    memories = []
+    if topic:
+        memories.extend(search_memories(topic, limit=memory_limit // 2))
+    
+    important_memories = recall_important(limit=5)
+    for mem in important_memories:
+        if mem not in memories:
+            memories.append(mem)
+    
+    recent_memories = recall_recent(limit=memory_limit - len(memories), speaker=speaker)
+    for mem in recent_memories:
+        if mem not in memories:
+            memories.append(mem)
+    
+    if memories:
+        context_parts.append("=== Long-Term Memory ===")
+        for mem in memories[:memory_limit]:
+            timestamp = mem.created_at.strftime("%Y-%m-%d %H:%M")
+            importance_marker = "⭐" if mem.importance >= 0.8 else ""
+            context_parts.append(
+                f"[{timestamp}] {mem.speaker} ({mem.memory_type.value}){importance_marker}: {mem.content}"
+            )
+    
+    if include_reference and topic:
+        try:
+            ref_results = search_reference_archive(topic, limit=3)
+            if not ref_results:
+                ref_results = search_reference_simple(topic, limit=3)
+            
+            if ref_results:
+                context_parts.append("\n=== Reference Archive (past conversations) ===")
+                for ref in ref_results:
+                    date = ref["conversation_date"].strftime("%Y-%m-%d") if ref.get("conversation_date") else "unknown"
+                    context_parts.append(
+                        f"[{date}] {ref['speaker']}: {ref['content'][:500]}..."
+                    )
+        except Exception:
+            pass
+    
+    return "\n".join(context_parts) if context_parts else ""
+
+
+def clear_reference_archive():
+    """Clear all Reference Memory (use with caution!)."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM reference_messages")
+            cur.execute("DELETE FROM reference_conversations")
             conn.commit()
     finally:
         conn.close()
