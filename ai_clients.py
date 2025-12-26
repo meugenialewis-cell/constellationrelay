@@ -32,6 +32,7 @@ def get_grok_client(custom_api_key: str = None) -> OpenAI:
 
 XAI_GROK_MODELS = {
     "Grok 4": "grok-4",
+    "Grok 4.1": "grok-4.1",
     "Grok 4.1 Fast (Reasoning)": "grok-4-1-fast-reasoning",
     "Grok 4.1 Fast": "grok-4-1-fast-non-reasoning",
     "Grok 4 Fast (Reasoning)": "grok-4-fast-reasoning",

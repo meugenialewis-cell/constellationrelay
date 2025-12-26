@@ -568,6 +568,74 @@ if PERSONAL_MODE:
             st.warning(f"Memory system not available: {str(e)}")
             st.info("Memory will be available after the first conversation with persistent memory enabled.")
     
+    with st.expander("📖 Context Diary (Stored Context)"):
+        try:
+            from memory_system import (
+                get_context_documents,
+                store_context_document,
+                delete_context_document,
+                get_context_document_history,
+                init_memory_schema
+            )
+            
+            init_memory_schema()
+            
+            st.markdown("""
+            **Store context files here instead of uploading them each time!**  
+            Context stored here is automatically loaded from memory, reducing token usage and avoiding rate limits.
+            """)
+            
+            tab_view, tab_add = st.tabs(["📄 View Documents", "➕ Add New"])
+            
+            with tab_view:
+                all_docs = get_context_documents(active_only=True)
+                
+                if all_docs:
+                    for doc in all_docs:
+                        owner_icon = "🌸" if doc.owner == "claude" else ("⚡" if doc.owner == "grok" else "🔗")
+                        with st.container():
+                            col_info, col_actions = st.columns([4, 1])
+                            with col_info:
+                                st.markdown(f"{owner_icon} **{doc.title}** (v{doc.version})")
+                                st.caption(f"Owner: {doc.owner} | Updated: {doc.updated_at.strftime('%Y-%m-%d %H:%M')}")
+                            with col_actions:
+                                if st.button("🗑️", key=f"del_ctx_{doc.document_id}"):
+                                    delete_context_document(doc.document_id)
+                                    st.rerun()
+                            
+                            with st.expander("View content"):
+                                st.text(doc.content[:2000] + "..." if len(doc.content) > 2000 else doc.content)
+                                
+                                history = get_context_document_history(doc.document_id)
+                                if len(history) > 1:
+                                    st.caption(f"Version history: {len(history)} versions")
+                else:
+                    st.info("No context documents stored yet. Add context files to have Claude and Grok remember them automatically!")
+            
+            with tab_add:
+                st.subheader("Add New Context Document")
+                
+                new_title = st.text_input("Document Title", placeholder="e.g., Phoenix Project Overview")
+                new_owner = st.selectbox("Owner", ["shared", "claude", "grok"], 
+                    help="shared = both AIs see it, or assign to a specific AI")
+                new_content = st.text_area("Content", height=200, 
+                    placeholder="Paste your context here... This will be stored in memory and loaded automatically for future conversations.")
+                
+                uploaded_ctx = st.file_uploader("Or upload a file", type=["txt", "md"])
+                if uploaded_ctx:
+                    new_content = uploaded_ctx.read().decode("utf-8")
+                    if not new_title:
+                        new_title = uploaded_ctx.name
+                
+                if st.button("💾 Save to Context Diary", disabled=not (new_title and new_content)):
+                    store_context_document(new_title, new_content, new_owner)
+                    st.success(f"Saved '{new_title}' to Context Diary!")
+                    st.rerun()
+                    
+        except Exception as e:
+            st.warning(f"Context Diary not available: {str(e)}")
+            st.info("Context Diary will be available after initializing the memory system.")
+    
     with st.expander("📚 Reference Archive (Complete Diary)"):
         try:
             from memory_system import (

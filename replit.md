@@ -3,7 +3,7 @@
 ## Overview
 A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
 
-## Three-Tier Memory System
+## Memory System
 
 ### 1. Short-Term Memory
 - Current conversation context window
@@ -21,12 +21,19 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Claude and Grok can query this when they need specific details
 - Like a perfect diary with total recall
 
+### 4. Context Diary (NEW)
+- Persistent storage for context documents
+- Versioned updates - can update context and keep history
+- Assign context to "shared", "claude", or "grok"
+- Automatically loaded from memory - no need to upload files each time
+- Reduces token usage and avoids rate limits
+
 ## Two Modes
 
 ### Personal Mode (Development)
 - Set `PERSONAL_MODE=true` in environment variables
-- All three memory tiers enabled
-- Memory Bank and Reference Archive UI visible
+- All memory tiers enabled
+- Memory Bank, Context Diary, and Reference Archive UI visible
 - Uses PostgreSQL database for storage
 
 ### Public Mode (Published)
@@ -39,10 +46,11 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - `app.py` - Main Streamlit web interface
 - `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
-- `memory_system.py` - Three-tier memory system (long-term + reference)
+- `memory_system.py` - Memory system (long-term, reference, context diary)
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
+- **Context Diary**: Store context permanently - no need to re-upload
 - Configure AI names and personalities
 - Select different models for each AI
 - Real-time conversation viewing
@@ -62,7 +70,7 @@ Users need:
 - Claude Opus 4.5, Claude Opus 4.1, Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5
 
 ### Grok (xAI direct API)
-- Grok 4, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4 Fast (Reasoning), Grok 3, Grok 3 Mini
+- Grok 4, Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4 Fast (Reasoning), Grok 3, Grok 3 Mini
 
 ## Running the App
 ```bash
@@ -77,6 +85,13 @@ To publish safely:
 4. No persistent storage - complete privacy
 
 ## Recent Changes
+- 2024-12-26: Added Context Diary feature
+  - Store context documents permanently in database
+  - Versioned updates with history tracking
+  - Assign to shared, claude, or grok
+  - Automatically loaded from memory - reduces token usage
+  - Added Grok 4.1 model to available models
+
 - 2024-12-19: Added three-tier memory system
   - Short-term: conversation context (existing)
   - Long-term: adaptive memory with importance scoring

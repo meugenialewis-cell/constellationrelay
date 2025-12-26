@@ -12,16 +12,20 @@ def try_import_memory():
         from memory_system import (
             hydrate_context, 
             hydrate_context_with_reference,
+            hydrate_context_with_diary,
             extract_and_store_memories, 
             init_memory_schema,
-            archive_conversation
+            archive_conversation,
+            get_context_for_ai
         )
         return {
             "hydrate": hydrate_context,
             "hydrate_with_reference": hydrate_context_with_reference,
+            "hydrate_with_diary": hydrate_context_with_diary,
             "extract": extract_and_store_memories,
             "init": init_memory_schema,
-            "archive": archive_conversation
+            "archive": archive_conversation,
+            "get_context": get_context_for_ai
         }
     except Exception:
         return None
@@ -54,31 +58,40 @@ class ConversationRelay:
         self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         self.memory_system = try_import_memory() if use_persistent_memory else None
-        memory_context = ""
+        claude_memory_context = ""
+        grok_memory_context = ""
         if self.memory_system and use_persistent_memory:
             try:
                 self.memory_system["init"]()
-                memory_context = self.memory_system["hydrate_with_reference"](
+                claude_memory_context = self.memory_system["hydrate_with_diary"](
+                    ai_name=claude_name,
+                    memory_limit=10,
+                    include_reference=True
+                )
+                grok_memory_context = self.memory_system["hydrate_with_diary"](
+                    ai_name=grok_name,
                     memory_limit=10,
                     include_reference=True
                 )
             except Exception:
                 try:
-                    memory_context = self.memory_system["hydrate"](memory_limit=10)
+                    claude_memory_context = self.memory_system["hydrate"](memory_limit=10)
+                    grok_memory_context = claude_memory_context
                 except Exception:
                     pass
         
         full_claude_context = claude_context
         full_grok_context = grok_context
-        if memory_context:
+        if claude_memory_context:
             if full_claude_context:
-                full_claude_context = f"{memory_context}\n\n{full_claude_context}"
+                full_claude_context = f"{claude_memory_context}\n\n{full_claude_context}"
             else:
-                full_claude_context = memory_context
+                full_claude_context = claude_memory_context
+        if grok_memory_context:
             if full_grok_context:
-                full_grok_context = f"{memory_context}\n\n{full_grok_context}"
+                full_grok_context = f"{grok_memory_context}\n\n{full_grok_context}"
             else:
-                full_grok_context = memory_context
+                full_grok_context = grok_memory_context
         
         self.claude_system = self._build_system_prompt(
             claude_name, grok_name, "Claude", claude_system_prompt, full_claude_context

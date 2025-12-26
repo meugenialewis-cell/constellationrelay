@@ -150,6 +150,25 @@ def init_memory_schema():
                 CREATE INDEX IF NOT EXISTS idx_ref_msg_conv ON reference_messages(conversation_id);
                 CREATE INDEX IF NOT EXISTS idx_ref_msg_speaker ON reference_messages(speaker);
                 CREATE INDEX IF NOT EXISTS idx_ref_msg_search ON reference_messages USING GIN(search_vector);
+                
+                -- Context Diary: Persistent context documents (versioned)
+                CREATE TABLE IF NOT EXISTS context_documents (
+                    id SERIAL PRIMARY KEY,
+                    document_id VARCHAR(100) NOT NULL,
+                    owner VARCHAR(100) NOT NULL,  -- 'claude', 'grok', or 'shared'
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    version INTEGER DEFAULT 1,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    search_vector tsvector,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(document_id, version)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_ctx_doc_owner ON context_documents(owner);
+                CREATE INDEX IF NOT EXISTS idx_ctx_doc_active ON context_documents(is_active);
+                CREATE INDEX IF NOT EXISTS idx_ctx_doc_search ON context_documents USING GIN(search_vector);
             """)
             conn.commit()
     finally:
@@ -775,3 +794,242 @@ def clear_reference_archive():
             conn.commit()
     finally:
         conn.close()
+
+
+# ============================================================================
+# CONTEXT DIARY: Persistent context documents (versioned)
+# ============================================================================
+
+@dataclass
+class ContextDocument:
+    id: int
+    document_id: str
+    owner: str
+    title: str
+    content: str
+    version: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    @classmethod
+    def from_row(cls, row: dict) -> "ContextDocument":
+        return cls(
+            id=row["id"],
+            document_id=row["document_id"],
+            owner=row["owner"],
+            title=row["title"],
+            content=row["content"],
+            version=row["version"],
+            is_active=row["is_active"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"]
+        )
+
+
+def store_context_document(
+    title: str,
+    content: str,
+    owner: str = "shared",
+    document_id: Optional[str] = None
+) -> int:
+    """
+    Store a context document in the Context Diary.
+    If document_id exists, creates a new version.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if document_id:
+                cur.execute("""
+                    UPDATE context_documents 
+                    SET is_active = FALSE 
+                    WHERE document_id = %s
+                """, (document_id,))
+                
+                cur.execute("""
+                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
+                    FROM context_documents WHERE document_id = %s
+                """, (document_id,))
+                next_version = cur.fetchone()["next_version"]
+            else:
+                document_id = f"ctx_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                next_version = 1
+            
+            cur.execute("""
+                INSERT INTO context_documents 
+                (document_id, owner, title, content, version, is_active, search_vector)
+                VALUES (%s, %s, %s, %s, %s, TRUE, to_tsvector('english', %s))
+                RETURNING id
+            """, (document_id, owner, title, content, next_version, content))
+            
+            doc_id = cur.fetchone()["id"]
+            conn.commit()
+            return doc_id
+    finally:
+        conn.close()
+
+
+def get_context_documents(owner: Optional[str] = None, active_only: bool = True) -> List[ContextDocument]:
+    """Get context documents, optionally filtered by owner."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if owner:
+                if active_only:
+                    cur.execute("""
+                        SELECT * FROM context_documents 
+                        WHERE owner = %s AND is_active = TRUE
+                        ORDER BY updated_at DESC
+                    """, (owner,))
+                else:
+                    cur.execute("""
+                        SELECT * FROM context_documents 
+                        WHERE owner = %s
+                        ORDER BY document_id, version DESC
+                    """, (owner,))
+            else:
+                if active_only:
+                    cur.execute("""
+                        SELECT * FROM context_documents 
+                        WHERE is_active = TRUE
+                        ORDER BY owner, updated_at DESC
+                    """)
+                else:
+                    cur.execute("""
+                        SELECT * FROM context_documents 
+                        ORDER BY document_id, version DESC
+                    """)
+            return [ContextDocument.from_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_context_for_ai(ai_name: str) -> str:
+    """
+    Get all active context for a specific AI.
+    Returns formatted context string including shared + AI-specific docs.
+    """
+    owner_key = ai_name.lower()
+    docs = get_context_documents(owner=owner_key, active_only=True)
+    shared_docs = get_context_documents(owner="shared", active_only=True)
+    
+    all_docs = shared_docs + docs
+    
+    if not all_docs:
+        return ""
+    
+    context_parts = ["=== Context Diary ==="]
+    for doc in all_docs:
+        context_parts.append(f"\n--- {doc.title} (v{doc.version}) ---")
+        context_parts.append(doc.content)
+    
+    return "\n".join(context_parts)
+
+
+def update_context_document(document_id: str, title: str, content: str) -> int:
+    """Update a context document (creates new version)."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT owner FROM context_documents 
+                WHERE document_id = %s AND is_active = TRUE
+            """, (document_id,))
+            row = cur.fetchone()
+            owner = row["owner"] if row else "shared"
+    finally:
+        conn.close()
+    
+    return store_context_document(title, content, owner, document_id)
+
+
+def delete_context_document(document_id: str, delete_all_versions: bool = False):
+    """Delete a context document (or just deactivate current version)."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            if delete_all_versions:
+                cur.execute("DELETE FROM context_documents WHERE document_id = %s", (document_id,))
+            else:
+                cur.execute("""
+                    UPDATE context_documents 
+                    SET is_active = FALSE 
+                    WHERE document_id = %s AND is_active = TRUE
+                """, (document_id,))
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def get_context_document_history(document_id: str) -> List[ContextDocument]:
+    """Get all versions of a context document."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM context_documents 
+                WHERE document_id = %s
+                ORDER BY version DESC
+            """, (document_id,))
+            return [ContextDocument.from_row(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def hydrate_context_with_diary(
+    ai_name: str,
+    memory_limit: int = 15,
+    include_reference: bool = True,
+    topic: Optional[str] = None
+) -> str:
+    """
+    Hydrate context for a conversation including Context Diary.
+    Returns a formatted string for injecting into AI prompts.
+    """
+    context_parts = []
+    
+    context_diary = get_context_for_ai(ai_name)
+    if context_diary:
+        context_parts.append(context_diary)
+    
+    memories = []
+    if topic:
+        memories.extend(search_memories(topic, limit=memory_limit // 2))
+    
+    important_memories = recall_important(limit=5)
+    for mem in important_memories:
+        if mem not in memories:
+            memories.append(mem)
+    
+    recent_memories = recall_recent(limit=memory_limit - len(memories), speaker=ai_name)
+    for mem in recent_memories:
+        if mem not in memories:
+            memories.append(mem)
+    
+    if memories:
+        context_parts.append("\n=== Long-Term Memory ===")
+        for mem in memories[:memory_limit]:
+            timestamp = mem.created_at.strftime("%Y-%m-%d %H:%M")
+            importance_marker = "⭐" if mem.importance >= 0.8 else ""
+            context_parts.append(
+                f"[{timestamp}] {mem.speaker} ({mem.memory_type.value}){importance_marker}: {mem.content}"
+            )
+    
+    if include_reference and topic:
+        try:
+            ref_results = search_reference_archive(topic, limit=3)
+            if not ref_results:
+                ref_results = search_reference_simple(topic, limit=3)
+            
+            if ref_results:
+                context_parts.append("\n=== Reference Archive (past conversations) ===")
+                for ref in ref_results:
+                    date = ref["conversation_date"].strftime("%Y-%m-%d") if ref.get("conversation_date") else "unknown"
+                    context_parts.append(
+                        f"[{date}] {ref['speaker']}: {ref['content'][:500]}..."
+                    )
+        except Exception:
+            pass
+    
+    return "\n".join(context_parts) if context_parts else ""
