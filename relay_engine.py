@@ -213,6 +213,10 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.claude_name,
                     self.grok_name
                 )
+            except Exception as e:
+                print(f"Memory extraction error: {e}")
+            
+            try:
                 title = None
                 if self.transcript:
                     first_msg = self.transcript[0].get("content", "")[:100]
@@ -223,8 +227,9 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     [self.claude_name, self.grok_name],
                     title=title
                 )
-            except Exception:
-                pass
+                print(f"Archived conversation {self.conversation_id} with {len(self.transcript)} messages")
+            except Exception as e:
+                print(f"Archive error: {e}")
         
         return self.transcript
     
@@ -326,6 +331,10 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     self.claude_name,
                     self.grok_name
                 )
+            except Exception as e:
+                print(f"Memory extraction error: {e}")
+            
+            try:
                 title = None
                 if self.transcript:
                     first_msg = self.transcript[0].get("content", "")[:100]
@@ -336,7 +345,8 @@ Keep your responses conversational and engaging. Aim for responses that are subs
                     [self.claude_name, self.grok_name],
                     title=title
                 )
-            except Exception:
-                pass
+                print(f"Archived conversation {self.conversation_id} with {len(self.transcript)} messages")
+            except Exception as e:
+                print(f"Archive error: {e}")
         
         return self.transcript
