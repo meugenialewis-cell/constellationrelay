@@ -1028,7 +1028,7 @@ def digest_context_to_memory(document_id: str, chunk_size: int = 500) -> int:
         if len(chunk.strip()) < 50:
             continue
             
-        store_memory(
+        remember(
             content=f"[From {doc.title}] {chunk}",
             speaker=speaker,
             memory_type=MemoryType.SEMANTIC,
