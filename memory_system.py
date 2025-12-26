@@ -977,19 +977,123 @@ def get_context_document_history(document_id: str) -> List[ContextDocument]:
         conn.close()
 
 
+def digest_context_to_memory(document_id: str, chunk_size: int = 500) -> int:
+    """
+    Digest a context document into adaptive memory entries.
+    This converts full documents into searchable memory chunks with high importance.
+    Returns the number of memories created.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM context_documents 
+                WHERE document_id = %s AND is_active = TRUE
+            """, (document_id,))
+            row = cur.fetchone()
+            if not row:
+                return 0
+            doc = ContextDocument.from_row(row)
+    finally:
+        conn.close()
+    
+    content = doc.content
+    paragraphs = content.split('\n\n')
+    
+    chunks = []
+    current_chunk = []
+    current_size = 0
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        para_size = len(para)
+        
+        if current_size + para_size > chunk_size and current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+            current_chunk = [para]
+            current_size = para_size
+        else:
+            current_chunk.append(para)
+            current_size += para_size
+    
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
+    
+    speaker = doc.owner if doc.owner != "shared" else "Context"
+    memories_created = 0
+    
+    for i, chunk in enumerate(chunks):
+        if len(chunk.strip()) < 50:
+            continue
+            
+        store_memory(
+            content=f"[From {doc.title}] {chunk}",
+            speaker=speaker,
+            memory_type=MemoryType.SEMANTIC,
+            importance=0.85,
+            conversation_id=f"ctx_{document_id}"
+        )
+        memories_created += 1
+    
+    return memories_created
+
+
+def get_context_for_ai_compact(ai_name: str, max_chars: int = 2000) -> str:
+    """
+    Get compact context for an AI with character limit.
+    Returns summarized/truncated context to avoid overwhelming the context window.
+    """
+    owner_key = ai_name.lower()
+    docs = get_context_documents(owner=owner_key, active_only=True)
+    shared_docs = get_context_documents(owner="shared", active_only=True)
+    
+    all_docs = shared_docs + docs
+    
+    if not all_docs:
+        return ""
+    
+    context_parts = ["=== Context Diary (summaries) ==="]
+    chars_used = len(context_parts[0])
+    
+    for doc in all_docs:
+        header = f"\n--- {doc.title} ---\n"
+        chars_used += len(header)
+        
+        remaining = max_chars - chars_used
+        if remaining <= 100:
+            context_parts.append(f"\n[+ {len(all_docs) - all_docs.index(doc)} more documents in memory]")
+            break
+        
+        content_preview = doc.content[:remaining]
+        if len(doc.content) > remaining:
+            content_preview = content_preview.rsplit(' ', 1)[0] + "... [digested to memory]"
+        
+        context_parts.append(header + content_preview)
+        chars_used += len(content_preview)
+    
+    return "\n".join(context_parts)
+
+
 def hydrate_context_with_diary(
     ai_name: str,
     memory_limit: int = 15,
     include_reference: bool = True,
-    topic: Optional[str] = None
+    topic: Optional[str] = None,
+    compact_context: bool = True
 ) -> str:
     """
     Hydrate context for a conversation including Context Diary.
     Returns a formatted string for injecting into AI prompts.
+    If compact_context=True, limits context diary to prevent overwhelming the context window.
     """
     context_parts = []
     
-    context_diary = get_context_for_ai(ai_name)
+    if compact_context:
+        context_diary = get_context_for_ai_compact(ai_name, max_chars=2000)
+    else:
+        context_diary = get_context_for_ai(ai_name)
     if context_diary:
         context_parts.append(context_diary)
     

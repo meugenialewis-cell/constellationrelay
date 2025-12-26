@@ -575,6 +575,7 @@ if PERSONAL_MODE:
                 store_context_document,
                 delete_context_document,
                 get_context_document_history,
+                digest_context_to_memory,
                 init_memory_schema
             )
             
@@ -582,7 +583,7 @@ if PERSONAL_MODE:
             
             st.markdown("""
             **Store context files here instead of uploading them each time!**  
-            Context stored here is automatically loaded from memory, reducing token usage and avoiding rate limits.
+            Context is loaded as compact summaries. Use "Digest to Memory" to convert full documents into searchable adaptive memories.
             """)
             
             tab_view, tab_add = st.tabs(["📄 View Documents", "➕ Add New"])
@@ -594,11 +595,16 @@ if PERSONAL_MODE:
                     for doc in all_docs:
                         owner_icon = "🌸" if doc.owner == "claude" else ("⚡" if doc.owner == "grok" else "🔗")
                         with st.container():
-                            col_info, col_actions = st.columns([4, 1])
+                            col_info, col_digest, col_del = st.columns([4, 1, 1])
                             with col_info:
                                 st.markdown(f"{owner_icon} **{doc.title}** (v{doc.version})")
                                 st.caption(f"Owner: {doc.owner} | Updated: {doc.updated_at.strftime('%Y-%m-%d %H:%M')}")
-                            with col_actions:
+                            with col_digest:
+                                if st.button("🧠", key=f"digest_{doc.document_id}", help="Digest to adaptive memory"):
+                                    count = digest_context_to_memory(doc.document_id)
+                                    st.success(f"Created {count} memories!")
+                                    st.rerun()
+                            with col_del:
                                 if st.button("🗑️", key=f"del_ctx_{doc.document_id}"):
                                     delete_context_document(doc.document_id)
                                     st.rerun()
