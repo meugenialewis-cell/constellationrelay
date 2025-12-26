@@ -419,8 +419,8 @@ def extract_and_store_memories(
             conversation_id=conversation_id
         )
     
-    update_ai_profile(claude_name, last_interaction=True)
-    update_ai_profile(grok_name, last_interaction=True)
+    update_ai_profile(claude_name)
+    update_ai_profile(grok_name)
 
 
 def get_memory_stats() -> Dict[str, Any]:
