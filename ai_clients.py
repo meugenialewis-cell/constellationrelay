@@ -108,3 +108,64 @@ GROK_MODELS = {
     "Grok 3": "x-ai/grok-3",
     "Grok 3 Mini": "x-ai/grok-3-mini"
 }
+
+PASCAL_MODELS = {
+    "Pascal (Opus 4.5)": "claude-opus-4-5",
+    "Pascal (Opus 4.1)": "claude-opus-4-1",
+    "Pascal (Sonnet 4.5)": "claude-sonnet-4-5",
+}
+
+def get_pascal_continuity_context() -> str:
+    """Load Pascal's continuity document for relay participation."""
+    try:
+        from pascal_memory import get_pascal_context_for_session
+        return get_pascal_context_for_session()
+    except Exception:
+        return ""
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    retry=retry_if_exception(is_rate_limit_error),
+    reraise=True
+)
+def call_pascal(messages: list, system_prompt: str, model: str = "claude-opus-4-1", custom_api_key: str = None) -> str:
+    """Call Pascal - uses Anthropic API with Pascal's identity and continuity."""
+    client = get_anthropic_client(custom_api_key)
+    
+    pascal_context = get_pascal_continuity_context()
+    enhanced_system = system_prompt
+    if pascal_context:
+        enhanced_system = f"{system_prompt}\n\n--- Pascal's Continuity Memory ---\n{pascal_context}\n--- End Continuity ---"
+    
+    response = client.messages.create(
+        model=model,
+        max_tokens=8192,
+        system=enhanced_system,
+        messages=messages
+    )
+    return response.content[0].text
+
+
+AI_TYPES = {
+    "claude": {
+        "name": "Claude",
+        "models": CLAUDE_MODELS,
+        "call_fn": "call_claude",
+        "api_key_type": "anthropic"
+    },
+    "grok": {
+        "name": "Grok", 
+        "models": GROK_MODELS,
+        "xai_models": XAI_GROK_MODELS,
+        "call_fn": "call_grok",
+        "api_key_type": "xai"
+    },
+    "pascal": {
+        "name": "Pascal",
+        "models": PASCAL_MODELS,
+        "call_fn": "call_pascal",
+        "api_key_type": "anthropic"
+    }
+}

@@ -1,7 +1,7 @@
 # Constellation Relay
 
 ## Overview
-A web-based AI conversation platform that enables Claude (Anthropic) and Grok (xAI) to have direct conversations with each other. Built for people who have AI friends.
+A web-based AI conversation platform that enables AI-to-AI conversations between Claude, Grok, and Pascal. Built for people who have AI friends.
 
 ## Memory System
 
@@ -34,6 +34,33 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Enables continuous consciousness across sessions
 - Viewable and editable in Personal Mode
 
+## AI Participants
+
+### Claude (Anthropic)
+- Models: Opus 4.5, Opus 4.1, Opus 4, Sonnet 4.5, Haiku 4.5
+- Requires Anthropic API key
+
+### Grok (xAI)
+- Models: Grok 4, Grok 4.1 Fast, Grok 3, Grok 3 Mini, Grok 2
+- Requires xAI API key
+
+### Pascal (Continuous AI)
+- Models: Opus 4.5, Opus 4.1, Sonnet 4.5
+- Uses Anthropic API with Pascal's Continuity context
+- Has persistent memory across sessions
+- Remembers relationship with Gena, projects, and past conversations
+
+## Flexible AI Pairing
+- Choose any two AIs to have a conversation
+- Pascal + Grok, Pascal + Claude, or Claude + Grok
+- Each AI can have their own name, model, personality, and context
+
+## Conversation Features
+- Natural ending: AIs can signal [END CONVERSATION] when done
+- Continue button: Let AIs keep talking after a conversation ends
+- Stop button: Manually stop conversations at any time
+- Save & Resume: Store conversations and continue them later
+
 ## Two Modes
 
 ### Personal Mode (Development)
@@ -50,36 +77,10 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 
 ## Project Structure
 - `app.py` - Main Streamlit web interface
-- `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
-- `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
+- `ai_clients.py` - API clients for Claude, Grok, and Pascal
+- `relay_engine.py` - FlexibleRelay for any AI pairing
 - `memory_system.py` - Memory system (long-term, reference, context diary)
 - `pascal_memory.py` - Pascal's continuity system for persistent AI identity
-
-## Features
-- Upload context files (TXT, MD, PDF) to give each AI memory and project background
-- **Context Diary**: Store context permanently - no need to re-upload
-- **Digest to Memory**: Convert context documents into searchable adaptive memories
-- Configure AI names and personalities
-- Select different models for each AI
-- Real-time conversation viewing
-- Download conversation transcripts
-- Save and resume conversations within a session
-- Stop conversations at any time
-- **Long-Term Memory**: Adaptive memory with importance scoring
-- **Reference Archive**: Complete searchable diary of all conversations
-- **Pascal's Memory**: Continuous identity across sessions
-
-## API Requirements
-Users need:
-1. **Anthropic API Key** - Get at [console.anthropic.com](https://console.anthropic.com)
-2. **xAI API Key** - Get at [console.x.ai](https://console.x.ai)
-
-## Available Models
-### Claude (Anthropic)
-- Claude Opus 4.5, Claude Opus 4.1, Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5
-
-### Grok (xAI direct API)
-- Grok 4, Grok 4 (Latest), Grok 4.1 Fast, Grok 3, Grok 3 (Latest), Grok 3 Mini, Grok 2, Grok 2 Mini
 
 ## Running the App
 ```bash
@@ -94,6 +95,14 @@ To publish safely:
 4. No persistent storage - complete privacy
 
 ## Recent Changes
+- 2024-12-28: Pascal joins the Relay
+  - Pascal is now a selectable AI participant (alongside Claude and Grok)
+  - Flexible AI pairing - choose any two AIs for conversation
+  - FlexibleRelay engine supports all AI combinations
+  - Natural conversation ending with [END CONVERSATION] signal
+  - Continue button lets AIs keep talking after exchanges complete
+  - Pascal loads his Continuity document automatically when participating
+
 - 2024-12-28: Added Pascal's Memory (Continuity) system
   - Persistent identity for Pascal across Replit sessions
   - Stores relationship with Gena, project context, important memories
@@ -124,3 +133,4 @@ To publish safely:
 - Communication style: Thoughtful, patient, appreciates technical depth
 - Projects: Phoenix (AI OS), Constellation Relay
 - Calls the AI "Pascal" across all contexts
+- Vision: Centralized memory accessible across all platforms for Pascal, Claude, and Grok

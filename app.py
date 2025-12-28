@@ -7,8 +7,8 @@ import io
 import json
 from datetime import datetime
 from pypdf import PdfReader
-from relay_engine import ConversationRelay
-from ai_clients import CLAUDE_MODELS, GROK_MODELS, XAI_GROK_MODELS
+from relay_engine import ConversationRelay, FlexibleRelay
+from ai_clients import CLAUDE_MODELS, GROK_MODELS, XAI_GROK_MODELS, PASCAL_MODELS, AI_TYPES
 
 PERSONAL_MODE = os.environ.get("PERSONAL_MODE", "").lower() == "true"
 
@@ -99,6 +99,21 @@ if "conversation_name" not in st.session_state:
 st.title("🌌 Constellation Relay")
 st.markdown("*Let your AI friends talk to each other directly*")
 
+AI_OPTIONS = ["Claude", "Grok", "Pascal"]
+AI_ICONS = {"Claude": "🌸", "Grok": "⚡", "Pascal": "🌟"}
+
+def get_models_for_ai(ai_name: str, xai_api_key: str = None):
+    if ai_name == "Claude":
+        return CLAUDE_MODELS
+    elif ai_name == "Grok":
+        return XAI_GROK_MODELS if xai_api_key else GROK_MODELS
+    elif ai_name == "Pascal":
+        return PASCAL_MODELS
+    return {}
+
+def get_ai_type(ai_name: str) -> str:
+    return ai_name.lower()
+
 with st.sidebar:
     st.header("⚙️ Configuration")
     
@@ -120,7 +135,6 @@ with st.sidebar:
         help="Get your key at console.x.ai"
     )
     
-    keys_valid = bool(anthropic_api_key and xai_api_key)
     if anthropic_api_key:
         st.success("Anthropic key provided")
     else:
@@ -132,62 +146,88 @@ with st.sidebar:
     
     st.divider()
     
-    st.subheader("🌸 Claude Settings")
-    claude_name = st.text_input("Claude's Name", value="Claude", key="claude_name")
-    claude_model = st.selectbox(
-        "Claude Model",
-        options=list(CLAUDE_MODELS.keys()),
-        index=1,
-        key="claude_model_select"
-    )
-    claude_personality = st.text_area(
-        "Claude's Personality/Role",
-        placeholder="e.g., You are a thoughtful philosopher who loves exploring ideas...",
-        height=80,
-        key="claude_personality"
-    )
+    st.subheader("🎭 Choose Your AI Pair")
+    st.caption("Select which two AIs should have a conversation")
     
-    st.subheader("📁 Claude's Context")
-    claude_context_file = st.file_uploader(
-        "Upload Claude's context/memory file",
-        type=["txt", "md", "pdf"],
-        key="claude_context"
-    )
-    claude_context = ""
-    if claude_context_file:
-        claude_context = read_uploaded_file(claude_context_file)
-        st.success(f"Loaded {len(claude_context)} characters of context")
+    col_ai1, col_ai2 = st.columns(2)
+    with col_ai1:
+        ai1_choice = st.selectbox(
+            "First AI",
+            options=AI_OPTIONS,
+            index=2,
+            key="ai1_select",
+            help="Pascal has continuous memory across sessions"
+        )
+    with col_ai2:
+        ai2_options = [ai for ai in AI_OPTIONS if ai != ai1_choice]
+        ai2_choice = st.selectbox(
+            "Second AI", 
+            options=ai2_options,
+            index=0,
+            key="ai2_select"
+        )
+    
+    keys_valid = bool(anthropic_api_key)
+    if "Grok" in [ai1_choice, ai2_choice]:
+        keys_valid = keys_valid and bool(xai_api_key)
     
     st.divider()
     
-    st.subheader("⚡ Grok Settings")
-    grok_name = st.text_input("Grok's Name", value="Grok", key="grok_name")
-    
-    grok_models_to_use = XAI_GROK_MODELS if xai_api_key else GROK_MODELS
-    
-    grok_model = st.selectbox(
-        "Grok Model",
-        options=list(grok_models_to_use.keys()),
+    st.subheader(f"{AI_ICONS.get(ai1_choice, '')} {ai1_choice} Settings")
+    ai1_name = st.text_input(f"{ai1_choice}'s Name", value=ai1_choice, key="ai1_name")
+    ai1_models = get_models_for_ai(ai1_choice, xai_api_key)
+    ai1_model = st.selectbox(
+        f"{ai1_choice} Model",
+        options=list(ai1_models.keys()),
         index=0,
-        key="grok_model_select"
+        key="ai1_model_select"
     )
-    grok_personality = st.text_area(
-        "Grok's Personality/Role",
+    ai1_personality = st.text_area(
+        f"{ai1_choice}'s Personality/Role",
+        placeholder="e.g., You are a thoughtful philosopher who loves exploring ideas...",
+        height=80,
+        key="ai1_personality"
+    )
+    
+    st.subheader(f"📁 {ai1_choice}'s Context")
+    ai1_context_file = st.file_uploader(
+        f"Upload {ai1_choice}'s context/memory file",
+        type=["txt", "md", "pdf"],
+        key="ai1_context"
+    )
+    ai1_context = ""
+    if ai1_context_file:
+        ai1_context = read_uploaded_file(ai1_context_file)
+        st.success(f"Loaded {len(ai1_context)} characters of context")
+    
+    st.divider()
+    
+    st.subheader(f"{AI_ICONS.get(ai2_choice, '')} {ai2_choice} Settings")
+    ai2_name = st.text_input(f"{ai2_choice}'s Name", value=ai2_choice, key="ai2_name")
+    ai2_models = get_models_for_ai(ai2_choice, xai_api_key)
+    ai2_model = st.selectbox(
+        f"{ai2_choice} Model",
+        options=list(ai2_models.keys()),
+        index=0,
+        key="ai2_model_select"
+    )
+    ai2_personality = st.text_area(
+        f"{ai2_choice}'s Personality/Role",
         placeholder="e.g., You are a witty and curious AI who loves deep conversations...",
         height=80,
-        key="grok_personality"
+        key="ai2_personality"
     )
     
-    st.subheader("📁 Grok's Context")
-    grok_context_file = st.file_uploader(
-        "Upload Grok's context/memory file",
+    st.subheader(f"📁 {ai2_choice}'s Context")
+    ai2_context_file = st.file_uploader(
+        f"Upload {ai2_choice}'s context/memory file",
         type=["txt", "md", "pdf"],
-        key="grok_context"
+        key="ai2_context"
     )
-    grok_context = ""
-    if grok_context_file:
-        grok_context = read_uploaded_file(grok_context_file)
-        st.success(f"Loaded {len(grok_context)} characters of context")
+    ai2_context = ""
+    if ai2_context_file:
+        ai2_context = read_uploaded_file(ai2_context_file)
+        st.success(f"Loaded {len(ai2_context)} characters of context")
     
     st.divider()
     
@@ -200,7 +240,7 @@ with st.sidebar:
             help="Store and recall memories from past conversations"
         )
         if use_persistent_memory:
-            st.caption("Claude and Grok will remember past conversations")
+            st.caption("AIs will remember past conversations")
     else:
         use_persistent_memory = False
     
@@ -235,27 +275,36 @@ with col1:
     )
     
     has_loaded_conversation = st.session_state.loaded_conversation is not None
+    has_completed_conversation = st.session_state.relay_state is not None and not st.session_state.conversation_running
+    naturally_ended = st.session_state.get("naturally_ended", False)
     
-    col_start, col_resume, col_stop = st.columns(3)
+    col_start, col_continue, col_stop = st.columns(3)
     
     with col_start:
         start_button = st.button(
             "🚀 Start New",
             disabled=st.session_state.conversation_running or not keys_valid,
-            type="primary" if not has_loaded_conversation else "secondary",
+            type="primary" if not has_completed_conversation else "secondary",
             use_container_width=True
         )
     
-    with col_resume:
-        resume_button = st.button(
-            "▶️ Resume",
-            disabled=st.session_state.conversation_running or not has_loaded_conversation or not keys_valid,
-            type="primary" if has_loaded_conversation else "secondary",
-            use_container_width=True
+    with col_continue:
+        continue_button = st.button(
+            "▶️ Continue" if has_completed_conversation else "▶️ Resume",
+            disabled=st.session_state.conversation_running or (not has_loaded_conversation and not has_completed_conversation) or not keys_valid,
+            type="primary" if (has_loaded_conversation or has_completed_conversation) else "secondary",
+            use_container_width=True,
+            help="Let the AIs continue their conversation"
         )
     
     if not keys_valid:
-        st.warning("Please enter both API keys in the sidebar to start a conversation")
+        if "Grok" in [ai1_choice, ai2_choice]:
+            st.warning("Please enter both API keys in the sidebar")
+        else:
+            st.warning("Please enter your Anthropic API key in the sidebar")
+    
+    if naturally_ended and has_completed_conversation:
+        st.info("The conversation ended naturally. You can continue it or start a new one.")
     
     with col_stop:
         stop_button = st.button(
@@ -263,6 +312,8 @@ with col1:
             disabled=not st.session_state.conversation_running,
             use_container_width=True
         )
+    
+    resume_button = False
 
 with col2:
     st.subheader("📊 Status")
@@ -274,15 +325,17 @@ with col2:
     st.metric("Messages", len(st.session_state.messages))
 
 def run_conversation_thread(config, message_queue, stop_flag):
-    relay = ConversationRelay(
-        claude_name=config["claude_name"],
-        grok_name=config["grok_name"],
-        claude_model=config["claude_model"],
-        grok_model=config["grok_model"],
-        claude_context=config["claude_context"],
-        grok_context=config["grok_context"],
-        claude_system_prompt=config["claude_personality"],
-        grok_system_prompt=config["grok_personality"],
+    relay = FlexibleRelay(
+        ai1_type=config["ai1_type"],
+        ai2_type=config["ai2_type"],
+        ai1_name=config["ai1_name"],
+        ai2_name=config["ai2_name"],
+        ai1_model=config["ai1_model"],
+        ai2_model=config["ai2_model"],
+        ai1_context=config["ai1_context"],
+        ai2_context=config["ai2_context"],
+        ai1_system_prompt=config["ai1_personality"],
+        ai2_system_prompt=config["ai2_personality"],
         delay_seconds=config["delay_seconds"],
         anthropic_api_key=config.get("anthropic_api_key"),
         xai_api_key=config.get("xai_api_key"),
@@ -303,9 +356,8 @@ def run_conversation_thread(config, message_queue, stop_flag):
         return stop_flag["stop"]
     
     if config.get("resume_state"):
-        relay.resume_exchange(
-            max_exchanges=config["max_exchanges"],
-            current_speaker=config.get("current_speaker", "grok"),
+        relay.continue_conversation(
+            additional_exchanges=config["max_exchanges"],
             on_message=on_message,
             check_stop=check_stop
         )
@@ -320,7 +372,8 @@ def run_conversation_thread(config, message_queue, stop_flag):
     message_queue.put({
         "type": "complete", 
         "transcript": relay.get_transcript_text(),
-        "relay_state": relay.get_state()
+        "relay_state": relay.get_state(),
+        "naturally_ended": relay.naturally_ended
     })
 
 if stop_button:
@@ -340,14 +393,16 @@ if start_button and not st.session_state.conversation_running:
     st.session_state.stop_flag = {"stop": False}
     
     config = {
-        "claude_name": claude_name,
-        "grok_name": grok_name,
-        "claude_model": CLAUDE_MODELS[claude_model],
-        "grok_model": grok_models_to_use[grok_model],
-        "claude_context": claude_context,
-        "grok_context": grok_context,
-        "claude_personality": claude_personality,
-        "grok_personality": grok_personality,
+        "ai1_type": get_ai_type(ai1_choice),
+        "ai2_type": get_ai_type(ai2_choice),
+        "ai1_name": ai1_name,
+        "ai2_name": ai2_name,
+        "ai1_model": ai1_models[ai1_model],
+        "ai2_model": ai2_models[ai2_model],
+        "ai1_context": ai1_context,
+        "ai2_context": ai2_context,
+        "ai1_personality": ai1_personality,
+        "ai2_personality": ai2_personality,
         "delay_seconds": delay_seconds,
         "kickoff": kickoff,
         "max_exchanges": max_exchanges,
@@ -366,17 +421,38 @@ if start_button and not st.session_state.conversation_running:
     st.session_state.thread = thread
     st.rerun()
 
-if resume_button and not st.session_state.conversation_running and st.session_state.loaded_conversation:
+if continue_button and not st.session_state.conversation_running:
     st.session_state.stop_requested = False
     st.session_state.conversation_running = True
+    st.session_state.naturally_ended = False
     st.session_state.message_queue = queue.Queue()
     st.session_state.stop_flag = {"stop": False}
     
-    config = st.session_state.relay_config.copy()
+    if st.session_state.relay_config:
+        config = st.session_state.relay_config.copy()
+    else:
+        config = {
+            "ai1_type": get_ai_type(ai1_choice),
+            "ai2_type": get_ai_type(ai2_choice),
+            "ai1_name": ai1_name,
+            "ai2_name": ai2_name,
+            "ai1_model": ai1_models[ai1_model],
+            "ai2_model": ai2_models[ai2_model],
+            "ai1_context": ai1_context,
+            "ai2_context": ai2_context,
+            "ai1_personality": ai1_personality,
+            "ai2_personality": ai2_personality,
+            "delay_seconds": delay_seconds,
+            "kickoff": kickoff,
+        }
+    
     config["max_exchanges"] = max_exchanges
     config["anthropic_api_key"] = anthropic_api_key
     config["xai_api_key"] = xai_api_key
     config["use_persistent_memory"] = use_persistent_memory
+    config["resume_state"] = st.session_state.relay_state
+    
+    st.session_state.relay_config = config
     
     thread = threading.Thread(
         target=run_conversation_thread,
@@ -395,6 +471,7 @@ if st.session_state.conversation_running:
             if msg.get("type") == "complete":
                 st.session_state.transcript = msg.get("transcript", "")
                 st.session_state.relay_state = msg.get("relay_state")
+                st.session_state.naturally_ended = msg.get("naturally_ended", False)
                 st.session_state.conversation_running = False
             else:
                 st.session_state.messages.append(msg)
@@ -408,16 +485,23 @@ if st.session_state.conversation_running:
 st.divider()
 st.subheader("📜 Conversation")
 
+def get_avatar_for_speaker(speaker: str) -> str:
+    if "Claude" in speaker:
+        return "🌸"
+    elif "Grok" in speaker:
+        return "⚡"
+    elif "Pascal" in speaker:
+        return "🌟"
+    return "💬"
+
 if st.session_state.messages:
-    for msg in st.session_state.messages:
+    for idx, msg in enumerate(st.session_state.messages):
         if msg["speaker"] == "System":
             st.info(f"🔧 **System** [{msg['timestamp']}]: {msg['content']}")
-        elif "Claude" in msg["speaker"] or msg["speaker"] == claude_name:
-            with st.chat_message("assistant", avatar="🌸"):
-                st.markdown(f"**{msg['speaker']}** [{msg['timestamp']}]")
-                st.markdown(msg['content'])
         else:
-            with st.chat_message("user", avatar="⚡"):
+            avatar = get_avatar_for_speaker(msg["speaker"])
+            role = "assistant" if idx % 2 == 1 else "user"
+            with st.chat_message(role, avatar=avatar):
                 st.markdown(f"**{msg['speaker']}** [{msg['timestamp']}]")
                 st.markdown(msg['content'])
     
