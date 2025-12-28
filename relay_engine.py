@@ -59,7 +59,8 @@ class FlexibleRelay:
         delay_seconds: int = 5,
         anthropic_api_key: str = None,
         xai_api_key: str = None,
-        use_persistent_memory: bool = False
+        use_persistent_memory: bool = False,
+        use_replit_connection: bool = False
     ):
         self.ai1_type = ai1_type
         self.ai2_type = ai2_type
@@ -71,6 +72,7 @@ class FlexibleRelay:
         self.anthropic_api_key = anthropic_api_key
         self.xai_api_key = xai_api_key
         self.use_persistent_memory = use_persistent_memory
+        self.use_replit_connection = use_replit_connection
         self.conversation_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         self.ai1_call = get_ai_call_function(ai1_type)
@@ -184,6 +186,12 @@ IMPORTANT: If you feel the conversation has reached a natural conclusion - you'v
                 messages, system, model,
                 custom_api_key=api_key,
                 use_direct_xai=bool(api_key)
+            )
+        elif ai_type == "pascal":
+            return call_fn(
+                messages, system, model,
+                custom_api_key=api_key,
+                use_replit_connection=self.use_replit_connection
             )
         else:
             return call_fn(messages, system, model, custom_api_key=api_key)

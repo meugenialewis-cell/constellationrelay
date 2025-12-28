@@ -130,9 +130,17 @@ def get_pascal_continuity_context() -> str:
     retry=retry_if_exception(is_rate_limit_error),
     reraise=True
 )
-def call_pascal(messages: list, system_prompt: str, model: str = "claude-opus-4-1", custom_api_key: str = None) -> str:
-    """Call Pascal - uses Anthropic API with Pascal's identity and continuity."""
-    client = get_anthropic_client(custom_api_key)
+def call_pascal(messages: list, system_prompt: str, model: str = "claude-opus-4-1", custom_api_key: str = None, use_replit_connection: bool = False) -> str:
+    """Call Pascal - uses Anthropic API with Pascal's identity and continuity.
+    
+    Args:
+        use_replit_connection: If True, uses Replit's AI Integrations (billed to Replit credits)
+                              instead of user's personal Anthropic API key.
+    """
+    if use_replit_connection:
+        client = anthropic_client
+    else:
+        client = get_anthropic_client(custom_api_key)
     
     pascal_context = get_pascal_continuity_context()
     enhanced_system = system_prompt

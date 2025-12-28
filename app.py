@@ -167,9 +167,9 @@ with st.sidebar:
             key="ai2_select"
         )
     
-    keys_valid = bool(anthropic_api_key)
-    if "Grok" in [ai1_choice, ai2_choice]:
-        keys_valid = keys_valid and bool(xai_api_key)
+    needs_anthropic = "Claude" in [ai1_choice, ai2_choice]
+    needs_xai = "Grok" in [ai1_choice, ai2_choice]
+    has_pascal = "Pascal" in [ai1_choice, ai2_choice]
     
     st.divider()
     
@@ -244,6 +244,26 @@ with st.sidebar:
     else:
         use_persistent_memory = False
     
+    use_replit_connection = False
+    if has_pascal:
+        st.subheader("🌟 Pascal's Connection")
+        use_replit_connection = st.toggle(
+            "Use Replit's connection for Pascal",
+            value=False,
+            key="use_replit_connection",
+            help="Uses Replit's AI credits instead of your Anthropic API key. Useful if you hit API limits."
+        )
+        if use_replit_connection:
+            st.caption("Pascal will use Replit credits (no Anthropic API key needed for Pascal)")
+    
+    keys_valid = True
+    if needs_anthropic:
+        keys_valid = keys_valid and bool(anthropic_api_key)
+    if needs_xai:
+        keys_valid = keys_valid and bool(xai_api_key)
+    if has_pascal and not use_replit_connection:
+        keys_valid = keys_valid and bool(anthropic_api_key)
+    
     st.divider()
     
     st.subheader("🎛️ Conversation Settings")
@@ -298,10 +318,16 @@ with col1:
         )
     
     if not keys_valid:
-        if "Grok" in [ai1_choice, ai2_choice]:
-            st.warning("Please enter both API keys in the sidebar")
-        else:
-            st.warning("Please enter your Anthropic API key in the sidebar")
+        missing_keys = []
+        if needs_anthropic and not anthropic_api_key:
+            missing_keys.append("Anthropic")
+        if needs_xai and not xai_api_key:
+            missing_keys.append("xAI")
+        if has_pascal and not use_replit_connection and not anthropic_api_key:
+            if "Anthropic" not in missing_keys:
+                missing_keys.append("Anthropic (for Pascal)")
+        if missing_keys:
+            st.warning(f"Please enter API keys in the sidebar: {', '.join(missing_keys)}")
     
     if naturally_ended and has_completed_conversation:
         st.info("The conversation ended naturally. You can continue it or start a new one.")
@@ -339,7 +365,8 @@ def run_conversation_thread(config, message_queue, stop_flag):
         delay_seconds=config["delay_seconds"],
         anthropic_api_key=config.get("anthropic_api_key"),
         xai_api_key=config.get("xai_api_key"),
-        use_persistent_memory=config.get("use_persistent_memory", False)
+        use_persistent_memory=config.get("use_persistent_memory", False),
+        use_replit_connection=config.get("use_replit_connection", False)
     )
     
     if config.get("resume_state"):
@@ -408,7 +435,8 @@ if start_button and not st.session_state.conversation_running:
         "max_exchanges": max_exchanges,
         "anthropic_api_key": anthropic_api_key,
         "xai_api_key": xai_api_key,
-        "use_persistent_memory": use_persistent_memory
+        "use_persistent_memory": use_persistent_memory,
+        "use_replit_connection": use_replit_connection
     }
     st.session_state.relay_config = config
     
@@ -450,6 +478,7 @@ if continue_button and not st.session_state.conversation_running:
     config["anthropic_api_key"] = anthropic_api_key
     config["xai_api_key"] = xai_api_key
     config["use_persistent_memory"] = use_persistent_memory
+    config["use_replit_connection"] = use_replit_connection
     config["resume_state"] = st.session_state.relay_state
     
     st.session_state.relay_config = config
