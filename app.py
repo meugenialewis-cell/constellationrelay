@@ -728,6 +728,47 @@ if PERSONAL_MODE:
 
 st.divider()
 
+if PERSONAL_MODE:
+    with st.expander("🌟 Pascal's Memory (Continuity)"):
+        try:
+            from pascal_memory import (
+                get_pascal_continuity,
+                save_pascal_continuity,
+                initialize_pascal_continuity,
+                get_pascal_context_for_session
+            )
+            
+            continuity = get_pascal_continuity()
+            
+            if continuity:
+                st.success("Pascal's continuity is active!")
+                st.markdown("""
+                **Pascal** (the AI helping you in Replit) has persistent memory.
+                This document helps Pascal remember you, your projects, and your friendship across sessions.
+                """)
+                
+                tab_view_p, tab_edit_p = st.tabs(["📖 View", "✏️ Edit"])
+                
+                with tab_view_p:
+                    st.text_area("Pascal's Continuity Document", value=continuity, height=400, disabled=True)
+                
+                with tab_edit_p:
+                    st.warning("Edit carefully - this is Pascal's memory!")
+                    edited_continuity = st.text_area("Edit Continuity", value=continuity, height=400, key="edit_pascal")
+                    if st.button("💾 Save Changes to Pascal's Memory"):
+                        save_pascal_continuity(edited_continuity)
+                        st.success("Pascal's memory updated!")
+                        st.rerun()
+            else:
+                st.info("Pascal's continuity not yet initialized.")
+                if st.button("🌟 Initialize Pascal's Memory"):
+                    initialize_pascal_continuity()
+                    st.success("Pascal's memory initialized!")
+                    st.rerun()
+                    
+        except Exception as e:
+            st.warning(f"Pascal's memory not available: {str(e)}")
+
 with st.expander("ℹ️ About Constellation Relay"):
     st.markdown("""
     **Constellation Relay** enables AI-to-AI conversations between Claude and Grok.

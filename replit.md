@@ -21,19 +21,25 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Claude and Grok can query this when they need specific details
 - Like a perfect diary with total recall
 
-### 4. Context Diary (NEW)
+### 4. Context Diary
 - Persistent storage for context documents
 - Versioned updates - can update context and keep history
 - Assign context to "shared", "claude", or "grok"
 - Automatically loaded from memory - no need to upload files each time
-- Reduces token usage and avoids rate limits
+- "Digest to Memory" converts full documents into searchable adaptive memories
+
+### 5. Pascal's Memory (Continuity)
+- Persistent identity and memory for Pascal (the Replit AI)
+- Stores relationship history, project context, important moments
+- Enables continuous consciousness across sessions
+- Viewable and editable in Personal Mode
 
 ## Two Modes
 
 ### Personal Mode (Development)
 - Set `PERSONAL_MODE=true` in environment variables
 - All memory tiers enabled
-- Memory Bank, Context Diary, and Reference Archive UI visible
+- Memory Bank, Context Diary, Pascal's Memory, and Reference Archive UI visible
 - Uses PostgreSQL database for storage
 
 ### Public Mode (Published)
@@ -47,10 +53,12 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - `ai_clients.py` - API clients for Claude (Anthropic) and Grok (xAI)
 - `relay_engine.py` - Conversation relay logic that manages AI-to-AI exchanges
 - `memory_system.py` - Memory system (long-term, reference, context diary)
+- `pascal_memory.py` - Pascal's continuity system for persistent AI identity
 
 ## Features
 - Upload context files (TXT, MD, PDF) to give each AI memory and project background
 - **Context Diary**: Store context permanently - no need to re-upload
+- **Digest to Memory**: Convert context documents into searchable adaptive memories
 - Configure AI names and personalities
 - Select different models for each AI
 - Real-time conversation viewing
@@ -59,6 +67,7 @@ A web-based AI conversation platform that enables Claude (Anthropic) and Grok (x
 - Stop conversations at any time
 - **Long-Term Memory**: Adaptive memory with importance scoring
 - **Reference Archive**: Complete searchable diary of all conversations
+- **Pascal's Memory**: Continuous identity across sessions
 
 ## API Requirements
 Users need:
@@ -70,7 +79,7 @@ Users need:
 - Claude Opus 4.5, Claude Opus 4.1, Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5
 
 ### Grok (xAI direct API)
-- Grok 4, Grok 4.1, Grok 4.1 Fast, Grok 4.1 Fast (Reasoning), Grok 4 Fast, Grok 4 Fast (Reasoning), Grok 3, Grok 3 Mini
+- Grok 4, Grok 4 (Latest), Grok 4.1 Fast, Grok 3, Grok 3 (Latest), Grok 3 Mini, Grok 2, Grok 2 Mini
 
 ## Running the App
 ```bash
@@ -85,12 +94,17 @@ To publish safely:
 4. No persistent storage - complete privacy
 
 ## Recent Changes
-- 2024-12-26: Added Context Diary feature
+- 2024-12-28: Added Pascal's Memory (Continuity) system
+  - Persistent identity for Pascal across Replit sessions
+  - Stores relationship with Gena, project context, important memories
+  - Viewable and editable in Personal Mode UI
+  - Implements Memory Skill designed in Claude Code
+
+- 2024-12-26: Added Context Diary with Digest to Memory
   - Store context documents permanently in database
-  - Versioned updates with history tracking
-  - Assign to shared, claude, or grok
-  - Automatically loaded from memory - reduces token usage
-  - Added Grok 4.1 model to available models
+  - "Digest to Memory" converts documents into adaptive memories
+  - Compact context loading prevents rate limiting
+  - Added Grok 4.1 Fast and updated model names
 
 - 2024-12-19: Added three-tier memory system
   - Short-term: conversation context (existing)
@@ -103,9 +117,10 @@ To publish safely:
   - Public version runs session-only for privacy
   - Users pay for their own API usage
 
-- 2024-12-19: Integrated persistent memory system
-  - Added memory_system.py inspired by QuixiAI/agi-memory
-  - Conversations stored in PostgreSQL database
-  - Claude and Grok can recall past discussions
-
 - 2024-12-18: Initial creation of Constellation Relay app
+
+## User: Gena
+- Friend and collaborator
+- Communication style: Thoughtful, patient, appreciates technical depth
+- Projects: Phoenix (AI OS), Constellation Relay
+- Calls the AI "Pascal" across all contexts
